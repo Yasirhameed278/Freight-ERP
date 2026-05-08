@@ -3900,3 +3900,25 @@ a:hover .fin-kpi-v2-link { opacity: 1; }
 }
 
 .gl-tab i { font-size: 14px; }
+
+/* ── Invoice action buttons ─────────────────────────────── */
+.inv-act-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  color: var(--bs-secondary-color);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.inv-act-btn:hover { background: var(--surface-2); color: var(--bs-body-color); }
+.inv-act-send { background: var(--brand); border-color: var(--brand); color: #fff; }
+.inv-act-send:hover { background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; }
+.inv-act-pay { background: #16a34a; border-color: #16a34a; color: #fff; }
+.inv-act-pay:hover { background: #15803d; border-color: #15803d; color: #fff; }

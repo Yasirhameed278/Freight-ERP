@@ -360,10 +360,9 @@ const Invoices = () => {
                           {fmtMoney(inv.amountDue, inv.currency)}
                         </td>
                         <td>
-                          <div className="d-flex gap-1 justify-content-end">
+                          <div className="d-flex gap-1 justify-content-end align-items-center">
                             <button
-                              className="btn btn-sm btn-outline-secondary"
-                              style={{ padding: '3px 8px', fontSize: 12 }}
+                              className="inv-act-btn"
                               onClick={() => invoicesApi.previewPdf(inv._id)}
                               title="Preview PDF"
                             >
@@ -371,20 +370,18 @@ const Invoices = () => {
                             </button>
                             {inv.status === 'draft' && (
                               <button
-                                className="btn btn-sm btn-primary"
-                                style={{ padding: '3px 10px', fontSize: 12 }}
+                                className="inv-act-btn inv-act-send"
                                 onClick={() => setSending(inv)}
                               >
-                                <i className="bi bi-send me-1"></i>Send
+                                <i className="bi bi-send-fill"></i>Send
                               </button>
                             )}
                             {['sent', 'partially_paid', 'overdue'].includes(inv.status) && (
                               <button
-                                className="btn btn-sm btn-success"
-                                style={{ padding: '3px 10px', fontSize: 12 }}
+                                className="inv-act-btn inv-act-pay"
                                 onClick={() => setPaying(inv)}
                               >
-                                <i className="bi bi-cash-coin me-1"></i>Pay
+                                <i className="bi bi-lightning-fill"></i>Pay
                               </button>
                             )}
                           </div>
