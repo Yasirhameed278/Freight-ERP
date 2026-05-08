@@ -120,15 +120,13 @@ body {
 .sidebar-brand-icon {
   width: 36px;
   height: 36px;
-  background: var(--brand);
-  border-radius: var(--radius-md);
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
   font-size: 18px;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(26, 86, 219, 0.4);
 }
 
 .sidebar-brand-text {
@@ -139,9 +137,9 @@ body {
 
 .sidebar-brand-name {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 800;
   color: #fff;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.03em;
   line-height: 1.1;
 }
 

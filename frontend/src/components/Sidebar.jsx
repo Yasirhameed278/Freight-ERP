@@ -98,11 +98,17 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onMobileClose }) => {
       <aside className={`app-sidebar${collapsed ? ' collapsed' : ''}${mobileOpen ? ' mobile-open' : ''}`}>
         {/* Brand */}
         <a className="sidebar-brand" href="/" onClick={(e) => { e.preventDefault(); navigate('/dashboard'); }}>
-          <div className="sidebar-brand-icon">
-            <i className="bi bi-truck-front-fill"></i>
+          <div className="sidebar-brand-icon" style={{ background: 'linear-gradient(135deg, #1a56db 0%, #7c3aed 100%)', boxShadow: '0 4px 14px rgba(124,58,237,0.45)' }}>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="3" y="3" width="14" height="3.5" rx="1.5" fill="white"/>
+              <rect x="3" y="8.25" width="10" height="3.5" rx="1.5" fill="white" fillOpacity="0.75"/>
+              <rect x="3" y="13.5" width="7" height="3.5" rx="1.5" fill="white" fillOpacity="0.5"/>
+            </svg>
           </div>
           <div className="sidebar-brand-text">
-            <span className="sidebar-brand-name">Freight ERP</span>
+            <span className="sidebar-brand-name">
+              Freight<span style={{ color: '#7c9ef8', fontWeight: 500 }}>ERP</span>
+            </span>
             <span className="sidebar-brand-tagline">Operations Suite</span>
           </div>
         </a>
