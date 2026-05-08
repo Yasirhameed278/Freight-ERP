@@ -267,13 +267,7 @@ const Layout = () => {
             <i className={`bi bi-layout-sidebar${collapsed ? '-reverse' : ''}`}></i>
           </button>
 
-          {/* Page title */}
-          <div className="topbar-page-info">
-            <div className="topbar-page-title">
-              <i className={`bi ${meta.icon} topbar-page-icon`}></i>
-              {meta.title}
-            </div>
-          </div>
+          <div className="topbar-page-info" />
 
           {/* Right actions */}
           <div className="topbar-actions">
