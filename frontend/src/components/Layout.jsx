@@ -267,25 +267,12 @@ const Layout = () => {
             <i className={`bi bi-layout-sidebar${collapsed ? '-reverse' : ''}`}></i>
           </button>
 
-          {/* Page title + breadcrumb */}
+          {/* Page title */}
           <div className="topbar-page-info">
             <div className="topbar-page-title">
               <i className={`bi ${meta.icon} topbar-page-icon`}></i>
               {meta.title}
             </div>
-            {meta.crumbs.length > 0 && (
-              <div className="topbar-breadcrumb">
-                <span className="topbar-bc-home">
-                  <i className="bi bi-house-door me-1"></i>Home
-                </span>
-                {meta.crumbs.map((c) => (
-                  <span key={c} className="topbar-bc-item">
-                    <i className="bi bi-chevron-right topbar-bc-sep"></i>
-                    {c}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Right actions */}
