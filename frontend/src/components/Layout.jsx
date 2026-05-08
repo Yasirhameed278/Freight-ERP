@@ -262,6 +262,11 @@ const Layout = () => {
             <i className="bi bi-list"></i>
           </button>
 
+          {/* Desktop sidebar toggle */}
+          <button className="topbar-icon-btn d-none d-lg-flex" onClick={toggleCollapse} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            <i className={`bi bi-layout-sidebar${collapsed ? '-reverse' : ''}`}></i>
+          </button>
+
           {/* Page title + breadcrumb */}
           <div className="topbar-page-info">
             <div className="topbar-page-title">

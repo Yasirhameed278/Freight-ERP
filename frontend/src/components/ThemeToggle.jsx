@@ -1,19 +1,15 @@
-import { Button } from 'react-bootstrap';
 import { useTheme } from '../context/ThemeContext';
 
-const ThemeToggle = ({ size = 'sm' }) => {
+const ThemeToggle = () => {
   const { isDark, toggleTheme } = useTheme();
   return (
-    <Button
-      variant={isDark ? 'outline-light' : 'outline-secondary'}
-      size={size}
+    <button
+      className="topbar-icon-btn"
       onClick={toggleTheme}
-      title={`Switch to ${isDark ? 'light' : 'dark'} mode`}
-      aria-label="Toggle color theme"
-      className="d-inline-flex align-items-center"
+      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
       <i className={`bi bi-${isDark ? 'sun-fill' : 'moon-fill'}`}></i>
-    </Button>
+    </button>
   );
 };
 

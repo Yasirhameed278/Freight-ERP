@@ -281,10 +281,10 @@ const SortableDealCard = ({ deal }) => {
         style={style}
         className={isDragging ? 'is-dragging' : ''}
         {...attributes}
+        {...listeners}
       >
         <DealCardView
           deal={deal}
-          dragListeners={listeners}
           onClick={() => !isDragging && setShowDetail(true)}
         />
       </div>

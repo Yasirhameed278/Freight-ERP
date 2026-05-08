@@ -632,6 +632,18 @@ const GL = () => {
 
   const allAccounts = coa.flatMap((g) => g.accounts);
 
+  const kpis = (() => {
+    const sum = (type) => allAccounts.filter((a) => a.type === type).reduce((s, a) => s + (a.balance || 0), 0);
+    const assets      = sum('asset');
+    const liabilities = sum('liability');
+    const equity      = sum('equity');
+    const revenue     = sum('revenue');
+    const expenses    = sum('expense');
+    return { totalAccounts: allAccounts.length, assets, liabilities, equity, revenue, net: assets - liabilities - equity };
+  })();
+
+  const fmtMoney = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(v || 0);
+
   const toggleGroup = (code) =>
     setExpandedGroups((prev) => ({ ...prev, [code]: !prev[code] }));
 
@@ -698,8 +710,27 @@ const GL = () => {
         )}
       </div>
 
+      {/* ── KPI Strip ────────────────────────────────────────── */}
+      <div className="gl-kpi-strip">
+        {[
+          { label: 'Total Accounts', value: kpis.totalAccounts, icon: 'bi-list-ul',      color: '#1a56db', isCount: true },
+          { label: 'Total Assets',   value: kpis.assets,        icon: 'bi-wallet2',       color: '#16a34a' },
+          { label: 'Liabilities',    value: kpis.liabilities,   icon: 'bi-credit-card',   color: '#dc2626' },
+          { label: 'Net Position',   value: kpis.net,           icon: 'bi-graph-up-arrow',color: kpis.net >= 0 ? '#16a34a' : '#dc2626' },
+          { label: 'Revenue',        value: kpis.revenue,       icon: 'bi-cash-stack',    color: '#7c3aed' },
+        ].map(({ label, value, icon, color, isCount }) => (
+          <div key={label} className="gl-kpi-tile">
+            <div className="gl-kpi-icon" style={{ background: `${color}15`, color }}><i className={`bi ${icon}`}></i></div>
+            <div>
+              <div className="gl-kpi-value" style={{ color }}>{isCount ? value : fmtMoney(value)}</div>
+              <div className="gl-kpi-label">{label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* ── Tab bar ──────────────────────────────────────────── */}
-      <div className="filter-chip-row mb-4">
+      <div className="gl-tab-bar">
         {[
           { key: 'coa',      label: 'Chart of Accounts', icon: 'bi-list-ul' },
           { key: 'vouchers', label: 'Voucher Entry',      icon: 'bi-pencil-square' },
@@ -707,10 +738,10 @@ const GL = () => {
         ].map((t) => (
           <button
             key={t.key}
-            className={`filter-chip${activeTab === t.key ? ' active' : ''}`}
+            className={`gl-tab${activeTab === t.key ? ' active' : ''}`}
             onClick={() => setActiveTab(t.key)}
           >
-            <i className={`bi ${t.icon} me-1`}></i>{t.label}
+            <i className={`bi ${t.icon}`}></i>{t.label}
           </button>
         ))}
       </div>
@@ -764,9 +795,13 @@ const GL = () => {
                     ></i>
                     <span style={{ width: 60, fontFamily: 'monospace', fontSize: 12, color: group.color, fontWeight: 700 }}>{group.code}</span>
                     <span style={{ flex: 1, fontWeight: 700, fontSize: 13, color: group.color }}>{group.group}</span>
-                    <span style={{ fontSize: 11, color: 'var(--bs-secondary-color)' }}>
+                    <span style={{ fontSize: 11, color: 'var(--bs-secondary-color)', marginRight: 12 }}>
                       {group.accounts.length} accounts
                     </span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: group.color, width: 100, textAlign: 'right' }}>
+                      {fmtMoney(group.accounts.reduce((s, a) => s + (a.balance || 0), 0))}
+                    </span>
+                    <span style={{ width: 60 }}></span>
                   </div>
 
                   {/* Account rows */}

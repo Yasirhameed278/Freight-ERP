@@ -153,15 +153,6 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onMobileClose }) => {
           </button>
         </div>
       </aside>
-
-      {/* Collapse toggle button (desktop only) */}
-      <button
-        className={`sidebar-collapse-btn${collapsed ? ' collapsed' : ''}`}
-        onClick={onToggle}
-        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-      >
-        <i className={`bi bi-chevron-${collapsed ? 'right' : 'left'}`}></i>
-      </button>
     </>
   );
 };
