@@ -46,12 +46,12 @@ async function seed() {
   const pw = await hashPw('Demo@1234');
 
   const users = await User.insertMany([
-    { firstName: 'Adam',    lastName: 'Al-Rashidi', email: 'admin@freightpro.ae',      password: pw, role: 'admin',            department: 'management',  status: 'active' },
-    { firstName: 'Sara',    lastName: 'Merchant',   email: 'manager@freightpro.ae',    password: pw, role: 'manager',          department: 'management',  status: 'active' },
-    { firstName: 'Khalid',  lastName: 'Hamdan',     email: 'ops@freightpro.ae',        password: pw, role: 'operations',       department: 'operations',  status: 'active' },
-    { firstName: 'Priya',   lastName: 'Nair',       email: 'sales@freightpro.ae',      password: pw, role: 'sales',            department: 'sales',       status: 'active' },
-    { firstName: 'Hassan',  lastName: 'Karimi',     email: 'finance@freightpro.ae',    password: pw, role: 'finance',          department: 'finance',     status: 'active' },
-    { firstName: 'Chen',    lastName: 'Wei',        email: 'cs@freightpro.ae',         password: pw, role: 'customer_service', department: 'operations',  status: 'active' },
+    { firstName: 'Ali',     lastName: 'Ahmed',      email: 'admin@freightpro.ae',      password: pw, role: 'admin',            department: 'management',  status: 'active' },
+    { firstName: 'Sana',    lastName: 'Malik',      email: 'manager@freightpro.ae',    password: pw, role: 'manager',          department: 'management',  status: 'active' },
+    { firstName: 'Usman',   lastName: 'Khan',       email: 'ops@freightpro.ae',        password: pw, role: 'operations',       department: 'operations',  status: 'active' },
+    { firstName: 'Fatima',  lastName: 'Riaz',       email: 'sales@freightpro.ae',      password: pw, role: 'sales',            department: 'sales',       status: 'active' },
+    { firstName: 'Hamza',   lastName: 'Sheikh',     email: 'finance@freightpro.ae',    password: pw, role: 'finance',          department: 'finance',     status: 'active' },
+    { firstName: 'Ayesha',  lastName: 'Qureshi',    email: 'cs@freightpro.ae',         password: pw, role: 'customer_service', department: 'operations',  status: 'active' },
   ]);
 
   const [admin, manager, ops, sales, finance, cs] = users;

@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo } from 'react';
-import { Row, Col, Alert, Form, Modal, InputGroup } from 'react-bootstrap';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { Alert, Form, Modal, Row, Col } from 'react-bootstrap';
 import { usersApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 
@@ -24,8 +24,8 @@ const fmtDate = (d) => {
   if (!d) return 'Never';
   const date = new Date(d);
   const diff = Date.now() - date;
-  if (diff < 60_000)  return 'Just now';
-  if (diff < 3600_000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 60_000)    return 'Just now';
+  if (diff < 3600_000)  return `${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400_000) return `${Math.floor(diff / 3600000)}h ago`;
   if (diff < 604800_000) return `${Math.floor(diff / 86400000)}d ago`;
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -78,7 +78,6 @@ const UserModal = ({ user: existing, currentRole, onClose, onSaved }) => {
 
   return (
     <Modal show onHide={onClose} size="lg" centered>
-      {/* Custom header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 38, height: 38, borderRadius: 10, background: `${isEdit ? '#1a56db' : '#059669'}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: isEdit ? '#1a56db' : '#059669', fontSize: 17 }}>
@@ -100,7 +99,6 @@ const UserModal = ({ user: existing, currentRole, onClose, onSaved }) => {
         <Modal.Body style={{ padding: '18px 22px 22px' }}>
           {err && <Alert variant="danger" className="py-2 mb-3" style={{ fontSize: 13 }}>{err}</Alert>}
 
-          {/* Section: Identity */}
           <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--bs-secondary-color)', marginBottom: 10, borderBottom: '1px solid var(--border-soft)', paddingBottom: 6 }}>
             Identity
           </div>
@@ -138,7 +136,6 @@ const UserModal = ({ user: existing, currentRole, onClose, onSaved }) => {
             </Col>
           </Row>
 
-          {/* Section: Access */}
           <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--bs-secondary-color)', marginBottom: 10, borderBottom: '1px solid var(--border-soft)', paddingBottom: 6 }}>
             Access & Role
           </div>
@@ -240,8 +237,78 @@ const DeactivateModal = ({ user: target, onClose, onSaved }) => {
   );
 };
 
+/* ── Filter Dropdown ──────────────────────────────────────────── */
+const FilterDropdown = ({ roleFilter, statusFilter, onRole, onStatus, onClear, onClose }) => {
+  const ref = useRef(null);
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  return (
+    <div ref={ref} className="um-filter-dropdown">
+      <div className="um-filter-section">
+        <div className="um-filter-label">Role</div>
+        <div className="um-filter-chips">
+          {ROLES.map((r) => (
+            <button
+              key={r}
+              className={`um-filter-chip${roleFilter === r ? ' active' : ''}`}
+              style={roleFilter === r
+                ? { background: ROLE_COLOR[r], color: '#fff', borderColor: ROLE_COLOR[r] }
+                : { borderColor: `${ROLE_COLOR[r]}50`, color: ROLE_COLOR[r] }
+              }
+              onClick={() => onRole(roleFilter === r ? '' : r)}
+            >
+              {r.replace('_', ' ')}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="um-filter-divider" />
+      <div className="um-filter-section">
+        <div className="um-filter-label">Status</div>
+        <div className="um-filter-chips">
+          {['active','inactive','suspended','pending'].map((s) => (
+            <button
+              key={s}
+              className={`um-filter-chip${statusFilter === s ? ' active' : ''}`}
+              onClick={() => onStatus(statusFilter === s ? '' : s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+      {(roleFilter || statusFilter) && (
+        <>
+          <div className="um-filter-divider" />
+          <button className="um-filter-clear" onClick={onClear}>
+            <i className="bi bi-x-circle me-1"></i>Clear all filters
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
+
 /* ── UserRow ──────────────────────────────────────────────────── */
 const UserRow = ({ u, currentUserId, onEdit, onDeactivate }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
+
   const roleColor = ROLE_COLOR[u.role] || '#1a56db';
   const sc = STATUS_CFG[u.status] || { label: u.status, color: '#6b7280', bg: '#f3f4f6', dot: false };
 
@@ -274,14 +341,6 @@ const UserRow = ({ u, currentUserId, onEdit, onDeactivate }) => {
         }
       </div>
 
-      {/* Branch */}
-      <div className="um-cell um-cell-branch">
-        {u.branch
-          ? <span style={{ fontSize: 12, color: 'var(--bs-secondary-color)' }}><i className="bi bi-geo-alt me-1 opacity-50"></i>{u.branch}</span>
-          : <span className="text-muted" style={{ fontSize: 12 }}>—</span>
-        }
-      </div>
-
       {/* Last login */}
       <div className="um-cell um-cell-login">
         <span style={{ fontSize: 12, color: 'var(--bs-secondary-color)' }}>
@@ -292,22 +351,27 @@ const UserRow = ({ u, currentUserId, onEdit, onDeactivate }) => {
       {/* Status */}
       <div className="um-cell um-cell-status">
         <span className="um-status-badge" style={{ background: sc.bg, color: sc.color }}>
-          {sc.dot && (
-            <span className="um-status-dot" style={{ background: sc.color }}></span>
-          )}
+          {sc.dot && <span className="um-status-dot" style={{ background: sc.color }}></span>}
           {sc.label}
         </span>
       </div>
 
-      {/* Actions */}
-      <div className="um-cell um-cell-actions">
-        <button className="um-action-btn" onClick={() => onEdit(u)} title="Edit user">
-          <i className="bi bi-pencil"></i>
+      {/* Overflow menu */}
+      <div className="um-cell um-cell-actions" ref={menuRef}>
+        <button className="um-more-btn" onClick={() => setMenuOpen((x) => !x)} title="Actions">
+          <i className="bi bi-three-dots"></i>
         </button>
-        {u.status === 'active' && u._id !== currentUserId && (
-          <button className="um-action-btn um-action-btn-danger" onClick={() => onDeactivate(u)} title="Deactivate">
-            <i className="bi bi-person-x"></i>
-          </button>
+        {menuOpen && (
+          <div className="um-row-menu">
+            <button className="um-row-menu-item" onClick={() => { onEdit(u); setMenuOpen(false); }}>
+              <i className="bi bi-pencil"></i>Edit user
+            </button>
+            {u.status === 'active' && u._id !== currentUserId && (
+              <button className="um-row-menu-item um-row-menu-item-danger" onClick={() => { onDeactivate(u); setMenuOpen(false); }}>
+                <i className="bi bi-person-x"></i>Deactivate
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -323,6 +387,7 @@ const UserManagement = () => {
   const [search, setSearch]       = useState('');
   const [roleFilter, setRole]     = useState('');
   const [statusFilter, setStatus] = useState('active');
+  const [showFilter, setShowFilter] = useState(false);
   const [editTarget, setEdit]     = useState(null);
   const [deactivateTarget, setDeactivate] = useState(null);
   const [showCreate, setCreate]   = useState(false);
@@ -339,12 +404,7 @@ const UserManagement = () => {
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [search, roleFilter, statusFilter]);
 
-  const roleStats = useMemo(() => {
-    const map = {};
-    for (const u of users) map[u.role] = (map[u.role] || 0) + 1;
-    return ROLES.map((r) => ({ role: r, count: map[r] || 0 })).filter((x) => x.count > 0);
-  }, [users]);
-
+  const activeFilterCount = (roleFilter ? 1 : 0) + (statusFilter ? 1 : 0);
   const totalActive = users.filter((u) => u.status === 'active').length;
 
   if (loading) {
@@ -380,100 +440,80 @@ const UserManagement = () => {
 
       {error && <div className="alert alert-danger mb-4" style={{ fontSize: 13 }}>{error}</div>}
 
-      {/* ── Summary strip ───────────────────────────────────────── */}
-      <div className="um-summary-strip mb-4">
-        {[
-          { label: 'Total Users',   value: users.length,                              icon: 'bi-people',       color: '#1a56db' },
-          { label: 'Active',        value: users.filter(u => u.status==='active').length,    icon: 'bi-check-circle', color: '#16a34a' },
-          { label: 'Inactive',      value: users.filter(u => u.status==='inactive').length,  icon: 'bi-dash-circle',  color: '#6b7280' },
-          { label: 'Suspended',     value: users.filter(u => u.status==='suspended').length, icon: 'bi-x-circle',     color: '#dc2626' },
-        ].map(({ label, value, icon, color }) => (
-          <div key={label} className="um-summary-tile">
-            <div className="um-summary-icon" style={{ background: `${color}15`, color }}>
-              <i className={`bi ${icon}`}></i>
-            </div>
-            <div>
-              <div className="um-summary-value" style={{ color: value > 0 && label !== 'Total Users' ? color : 'var(--bs-body-color)' }}>{value}</div>
-              <div className="um-summary-label">{label}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Role filter pills ───────────────────────────────────── */}
-      <div className="user-role-pills mb-3">
-        {roleStats.map(({ role, count }) => (
-          <button
-            key={role}
-            className={`user-role-pill${roleFilter === role ? ' active' : ''}`}
-            style={roleFilter === role
-              ? { background: ROLE_COLOR[role], borderColor: ROLE_COLOR[role], color: '#fff' }
-              : { borderColor: `${ROLE_COLOR[role]}50`, color: ROLE_COLOR[role] }
-            }
-            onClick={() => setRole(roleFilter === role ? '' : role)}
-          >
-            <span
-              style={{
-                width: 7, height: 7, borderRadius: '50%',
-                background: roleFilter === role ? 'rgba(255,255,255,0.7)' : ROLE_COLOR[role],
-                display: 'inline-block',
-              }}
-            ></span>
-            {role.replace('_', ' ')}
-            <span
-              style={{
-                marginLeft: 4, fontSize: 10, fontWeight: 800,
-                background: roleFilter === role ? 'rgba(255,255,255,0.25)' : `${ROLE_COLOR[role]}20`,
-                color: roleFilter === role ? '#fff' : ROLE_COLOR[role],
-                padding: '1px 6px', borderRadius: 10,
-              }}
-            >
-              {count}
-            </span>
-          </button>
-        ))}
-        {roleFilter && (
-          <button className="user-role-pill" onClick={() => setRole('')} style={{ borderColor: 'var(--border-soft)', color: 'var(--bs-secondary-color)' }}>
-            <i className="bi bi-x me-1" style={{ fontSize: 11 }}></i>Clear
-          </button>
-        )}
-      </div>
-
-      {/* ── Search + status filter ──────────────────────────────── */}
-      <div className="d-flex gap-2 flex-wrap align-items-center mb-3">
-        <InputGroup size="sm" style={{ width: 280 }}>
-          <InputGroup.Text style={{ background: 'var(--surface)' }}><i className="bi bi-search"></i></InputGroup.Text>
-          <Form.Control
+      {/* ── Toolbar ─────────────────────────────────────────────── */}
+      <div className="um-toolbar">
+        {/* Search */}
+        <div className="um-search-box">
+          <i className="bi bi-search um-search-icon"></i>
+          <input
+            className="um-search-input"
             placeholder="Search name or email…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ background: 'var(--surface)' }}
           />
-        </InputGroup>
-        <Form.Select size="sm" style={{ width: 160, background: 'var(--surface)' }} value={statusFilter} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="suspended">Suspended</option>
-          <option value="pending">Pending</option>
-        </Form.Select>
-        <span className="text-muted ms-auto" style={{ fontSize: 12 }}>
+          {search && (
+            <button className="um-search-clear" onClick={() => setSearch('')}>
+              <i className="bi bi-x"></i>
+            </button>
+          )}
+        </div>
+
+        {/* Filter button + dropdown */}
+        <div style={{ position: 'relative' }}>
+          <button
+            className={`um-filter-btn${activeFilterCount > 0 ? ' has-filters' : ''}`}
+            onClick={() => setShowFilter((x) => !x)}
+          >
+            <i className="bi bi-sliders2"></i>
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="um-filter-count">{activeFilterCount}</span>
+            )}
+          </button>
+          {showFilter && (
+            <FilterDropdown
+              roleFilter={roleFilter}
+              statusFilter={statusFilter}
+              onRole={setRole}
+              onStatus={setStatus}
+              onClear={() => { setRole(''); setStatus(''); }}
+              onClose={() => setShowFilter(false)}
+            />
+          )}
+        </div>
+
+        {/* Active filter chips */}
+        {roleFilter && (
+          <span
+            className="um-active-chip"
+            style={{ background: `${ROLE_COLOR[roleFilter]}15`, color: ROLE_COLOR[roleFilter], borderColor: `${ROLE_COLOR[roleFilter]}35` }}
+          >
+            {roleFilter.replace('_', ' ')}
+            <button onClick={() => setRole('')}><i className="bi bi-x"></i></button>
+          </span>
+        )}
+        {statusFilter && (
+          <span className="um-active-chip">
+            {statusFilter}
+            <button onClick={() => setStatus('')}><i className="bi bi-x"></i></button>
+          </span>
+        )}
+
+        <span className="um-toolbar-count">
           {users.length} user{users.length !== 1 ? 's' : ''}
         </span>
       </div>
 
-      {/* ── User List ───────────────────────────────────────────── */}
+      {/* ── User Table ──────────────────────────────────────────── */}
       <div className="erp-card">
-        {/* Table header */}
         <div className="um-table-header">
           <div style={{ width: 44 }}></div>
           <div className="um-th um-th-name">Name / Email</div>
           <div className="um-th um-th-role">Role</div>
           <div className="um-th um-th-dept">Department</div>
-          <div className="um-th um-th-branch">Branch</div>
           <div className="um-th um-th-login">Last Login</div>
           <div className="um-th um-th-status">Status</div>
-          <div className="um-th um-th-actions">Actions</div>
+          <div className="um-th um-th-actions"></div>
         </div>
 
         {users.length === 0 ? (

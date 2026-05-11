@@ -141,11 +141,11 @@ const NotifPanel = ({ onClose }) => {
   }, [onClose]);
 
   const notifs = [
-    { id: 1, icon: 'bi-check-circle-fill',  color: '#16a34a', title: 'Shipment SEA-2024-001 approved',       time: '2m ago',  unread: true },
-    { id: 2, icon: 'bi-exclamation-circle-fill', color: '#d97706', title: 'Invoice INV-0042 overdue by 5 days', time: '1h ago',  unread: true },
-    { id: 3, icon: 'bi-person-plus-fill',   color: '#1a56db', title: 'New client Acme Corp registered',       time: '3h ago',  unread: true },
-    { id: 4, icon: 'bi-truck',              color: '#8b5cf6', title: 'Milestone updated: Cargo Received',     time: '5h ago',  unread: false },
-    { id: 5, icon: 'bi-wallet2',            color: '#0891b2', title: 'Payment of $12,400 recorded',          time: 'Yesterday', unread: false },
+    { id: 1, icon: 'bi-check-circle-fill',       color: '#16a34a', title: 'Shipment KHI-2024-001 approved',          time: '2m ago',    unread: true },
+    { id: 2, icon: 'bi-exclamation-circle-fill', color: '#d97706', title: 'Invoice INV-0042 overdue by 5 days',      time: '1h ago',    unread: true },
+    { id: 3, icon: 'bi-person-plus-fill',        color: '#1a56db', title: 'New client Al-Noor Trading registered',   time: '3h ago',    unread: true },
+    { id: 4, icon: 'bi-truck',                   color: '#8b5cf6', title: 'Milestone updated: Cargo Received',       time: '5h ago',    unread: false },
+    { id: 5, icon: 'bi-wallet2',                 color: '#0891b2', title: 'Payment of PKR 3,450,000 recorded',       time: 'Yesterday', unread: false },
   ];
 
   return (
