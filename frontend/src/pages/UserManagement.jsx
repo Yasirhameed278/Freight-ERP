@@ -16,8 +16,8 @@ const ROLE_COLOR = {
 const STATUS_CFG = {
   active:    { label: 'Active',    color: '#16a34a', bg: '#dcfce7', dot: true },
   inactive:  { label: 'Inactive',  color: '#6b7280', bg: '#f3f4f6', dot: false },
-  suspended: { label: 'Suspended', color: '#dc2626', bg: '#fee2e2', dot: false },
-  pending:   { label: 'Pending',   color: '#d97706', bg: '#fef9c3', dot: false },
+  suspended: { label: 'Suspended', color: '#6b7280', bg: '#f3f4f6', dot: false },
+  pending:   { label: 'Pending',   color: '#6b7280', bg: '#f3f4f6', dot: false },
 };
 
 const fmtDate = (d) => {
@@ -257,10 +257,6 @@ const FilterDropdown = ({ roleFilter, statusFilter, onRole, onStatus, onClear, o
             <button
               key={r}
               className={`um-filter-chip${roleFilter === r ? ' active' : ''}`}
-              style={roleFilter === r
-                ? { background: ROLE_COLOR[r], color: '#fff', borderColor: ROLE_COLOR[r] }
-                : { borderColor: `${ROLE_COLOR[r]}50`, color: ROLE_COLOR[r] }
-              }
               onClick={() => onRole(roleFilter === r ? '' : r)}
             >
               {r.replace('_', ' ')}
@@ -314,31 +310,17 @@ const UserRow = ({ u, currentUserId, onEdit, onDeactivate }) => {
 
   return (
     <div className="um-user-row">
-      {/* Avatar */}
-      <div className="um-avatar" style={{ background: roleColor }}>
-        {u.firstName?.[0]}{u.lastName?.[0]}
-      </div>
-
-      {/* Name / email */}
+      {/* Name */}
       <div className="um-user-info">
         <div className="um-user-name">{u.firstName} {u.lastName}</div>
-        <div className="um-user-email">{u.email}</div>
       </div>
 
-      {/* Role badge */}
-      <div className="um-cell um-cell-role">
-        <span className="um-role-badge" style={{ background: `${roleColor}18`, color: roleColor, border: `1px solid ${roleColor}30` }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: roleColor, display: 'inline-block', marginRight: 5, flexShrink: 0 }}></span>
-          {u.role?.replace('_', ' ')}
-        </span>
-      </div>
+      {/* Email */}
+      <div className="um-cell um-cell-email">{u.email}</div>
 
-      {/* Department */}
-      <div className="um-cell um-cell-dept">
-        {u.department
-          ? <span className="um-tag">{u.department}</span>
-          : <span className="text-muted" style={{ fontSize: 12 }}>—</span>
-        }
+      {/* Role */}
+      <div className="um-cell um-cell-role" style={{ fontSize: 13.5, color: 'var(--bs-body-color)', fontWeight: 500 }}>
+        {u.role?.replace('_', ' ')}
       </div>
 
       {/* Last login */}
@@ -427,10 +409,6 @@ const UserManagement = () => {
           <div className="ss-page-header-icon"><i className="bi bi-people"></i></div>
           <div>
             <h4 className="ss-page-title">User Management</h4>
-            <div className="ss-page-sub">
-              <span style={{ fontWeight: 700, color: 'var(--bs-body-color)' }}>{totalActive}</span> active ·{' '}
-              <span style={{ fontWeight: 700, color: 'var(--bs-body-color)' }}>{users.length}</span> total staff accounts
-            </div>
           </div>
         </div>
         <button className="ss-action-btn ss-action-btn-primary" onClick={() => setCreate(true)}>
@@ -484,10 +462,7 @@ const UserManagement = () => {
 
         {/* Active filter chips */}
         {roleFilter && (
-          <span
-            className="um-active-chip"
-            style={{ background: `${ROLE_COLOR[roleFilter]}15`, color: ROLE_COLOR[roleFilter], borderColor: `${ROLE_COLOR[roleFilter]}35` }}
-          >
+          <span className="um-active-chip">
             {roleFilter.replace('_', ' ')}
             <button onClick={() => setRole('')}><i className="bi bi-x"></i></button>
           </span>
@@ -507,10 +482,9 @@ const UserManagement = () => {
       {/* ── User Table ──────────────────────────────────────────── */}
       <div className="erp-card">
         <div className="um-table-header">
-          <div style={{ width: 44 }}></div>
-          <div className="um-th um-th-name">Name / Email</div>
+          <div className="um-th um-th-name">Name</div>
+          <div className="um-th um-th-email">Email</div>
           <div className="um-th um-th-role">Role</div>
-          <div className="um-th um-th-dept">Department</div>
           <div className="um-th um-th-login">Last Login</div>
           <div className="um-th um-th-status">Status</div>
           <div className="um-th um-th-actions"></div>

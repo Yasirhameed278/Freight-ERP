@@ -168,9 +168,15 @@ const Kanban = () => {
         <div className="ss-page-header">
           <div className="ss-page-header-left">
             <div className="ss-page-header-icon"><i className="bi bi-kanban"></i></div>
-            <div>
-              <h4 className="ss-page-title">Sales Pipeline</h4>
-              <div className="ss-page-sub">Drag cards to advance deal stages · click to open deal details</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <h4 className="ss-page-title" style={{ margin: 0 }}>Sales Pipeline</h4>
+              <span className="ss-info-tip" data-tip="Drag cards to advance deal stages · click to open deal details">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.25"/>
+                  <circle cx="8" cy="5.2" r="0.85" fill="currentColor"/>
+                  <path d="M8 7.5v3.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                </svg>
+              </span>
             </div>
           </div>
           <div className="ss-header-actions">

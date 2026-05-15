@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { Row, Col, InputGroup, Form, Modal, Alert } from 'react-bootstrap';
+import { Row, Col, InputGroup, Form, Modal } from 'react-bootstrap';
 import { clientsApi } from '../api';
 
 /* ── Formatters ──────────────────────────────────────────────── */
@@ -36,9 +36,33 @@ const initials = (name) =>
   (name || '?').split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
 /* ── New Client Modal ────────────────────────────────────────── */
-const CLIENT_TYPES = ['shipper','consignee','both','agent','carrier','vendor','broker','trucker'];
 
 const EMPTY_CLIENT = { companyName: '', clientCode: '', type: 'both', email: '', phone: '', country: '', status: 'active' };
+
+const CLIENT_TYPE_OPTIONS = [
+  { value: 'shipper',    label: 'Shipper',    icon: 'bi-box-seam' },
+  { value: 'consignee',  label: 'Consignee',  icon: 'bi-building-down' },
+  { value: 'agent',      label: 'Agent',      icon: 'bi-person-badge' },
+  { value: 'vendor',     label: 'Vendor',     icon: 'bi-shop' },
+  { value: 'broker',     label: 'Broker',     icon: 'bi-briefcase' },
+  { value: 'both',       label: 'Both',       icon: 'bi-arrow-left-right' },
+  { value: 'carrier',    label: 'Carrier',    icon: 'bi-truck' },
+  { value: 'trucker',    label: 'Trucker',    icon: 'bi-truck-flatbed' },
+];
+
+const FieldLabel = ({ children, hint }) => (
+  <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--bs-secondary-color)', marginBottom: 6, letterSpacing: '0.02em', display: 'flex', alignItems: 'baseline', gap: 6 }}>
+    {children}
+    {hint && <span style={{ fontSize: 10.5, fontWeight: 400, opacity: 0.65 }}>{hint}</span>}
+  </div>
+);
+
+const fieldStyle = {
+  fontSize: 13.5,
+  background: 'var(--surface-2)',
+  border: '1.5px solid var(--border-soft)',
+  borderRadius: 8,
+};
 
 const NewClientModal = ({ show, onHide, onCreated }) => {
   const [form,       setForm]       = useState(EMPTY_CLIENT);
@@ -68,92 +92,101 @@ const NewClientModal = ({ show, onHide, onCreated }) => {
     }
   };
 
-  const Label = ({ children }) => (
-    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--bs-secondary-color)', marginBottom: 6 }}>
-      {children}
-    </div>
-  );
-
   return (
     <Modal show={show} onHide={onHide} centered size="md">
-      {/* Custom header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'color-mix(in srgb, #059669 12%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669', fontSize: 16 }}>
-            <i className="bi bi-building-add"></i>
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>New Client</div>
-            <div style={{ fontSize: 11.5, color: 'var(--bs-secondary-color)' }}>Add a shipper, consignee, agent, or vendor</div>
-          </div>
+      {/* Header */}
+      <div style={{ padding: '22px 24px 16px', borderBottom: '1px solid var(--border-soft)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 16.5, letterSpacing: '-0.01em' }}>New Client</div>
+          <div style={{ fontSize: 13, color: 'var(--bs-secondary-color)', marginTop: 3 }}>Add a new company to your client directory</div>
         </div>
-        <button type="button" onClick={onHide} style={{ background: 'none', border: 'none', fontSize: 18, color: 'var(--bs-secondary-color)', cursor: 'pointer', padding: 4, lineHeight: 1 }}>
+        <button type="button" onClick={onHide} style={{ background: 'none', border: 'none', fontSize: 15, color: 'var(--bs-secondary-color)', cursor: 'pointer', padding: '3px 4px', lineHeight: 1, marginTop: 2 }}>
           <i className="bi bi-x-lg"></i>
         </button>
       </div>
 
       <Form onSubmit={handleSubmit}>
-        <Modal.Body style={{ padding: '16px 20px 20px' }}>
-          {error && <Alert variant="danger" className="py-2 mb-3" style={{ fontSize: 13 }}>{error}</Alert>}
+        <Modal.Body style={{ padding: '20px 24px' }}>
+          {error && (
+            <div style={{ fontSize: 12.5, color: '#dc2626', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', marginBottom: 16 }}>
+              <i className="bi bi-exclamation-circle me-2"></i>{error}
+            </div>
+          )}
 
           <Row className="g-3">
-            <Col md={8}>
-              <Label>Company Name *</Label>
+            <Col xs={12}>
+              <FieldLabel>Company Name <span style={{ color: '#ef4444' }}>*</span></FieldLabel>
               <Form.Control
                 value={form.companyName} onChange={(e) => set('companyName', e.target.value)} required
                 placeholder="e.g. ACME Logistics Ltd"
-                style={{ fontSize: 13, background: 'var(--surface-2)', border: '1px solid var(--border-soft)', borderRadius: 8 }}
+                style={fieldStyle}
               />
             </Col>
-            <Col md={4}>
-              <Label>Client Code *</Label>
+
+            <Col xs={12}>
+              <FieldLabel hint="— leave blank to auto-generate">Client Code</FieldLabel>
               <Form.Control
-                value={form.clientCode} onChange={(e) => set('clientCode', e.target.value.toUpperCase())} required
-                placeholder="e.g. ACM001" maxLength={20}
-                style={{ fontSize: 13, background: 'var(--surface-2)', border: '1px solid var(--border-soft)', borderRadius: 8, fontFamily: 'monospace' }}
+                value={form.clientCode} onChange={(e) => set('clientCode', e.target.value.toUpperCase())}
+                placeholder="ACM001" maxLength={20}
+                style={{ ...fieldStyle, fontFamily: 'monospace', letterSpacing: '0.04em' }}
               />
             </Col>
-            <Col md={6}>
-              <Label>Client Type</Label>
-              <Form.Select value={form.type} onChange={(e) => set('type', e.target.value)}
-                style={{ fontSize: 13, background: 'var(--surface-2)', border: '1px solid var(--border-soft)', borderRadius: 8 }}>
-                {CLIENT_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-              </Form.Select>
+
+            <Col xs={12}>
+              <FieldLabel>Client Type</FieldLabel>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                {CLIENT_TYPE_OPTIONS.map((t) => {
+                  const active = form.type === t.value;
+                  return (
+                    <button
+                      key={t.value} type="button" onClick={() => set('type', t.value)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '6px 13px', borderRadius: 8, fontSize: 12.5, fontWeight: 500, cursor: 'pointer',
+                        border: active ? '1.5px solid var(--brand)' : '1.5px solid var(--border-soft)',
+                        background: active ? 'color-mix(in srgb, var(--brand) 8%, var(--surface-2))' : 'var(--surface-2)',
+                        color: active ? 'var(--brand)' : 'var(--bs-secondary-color)',
+                        transition: 'all 0.12s',
+                      }}
+                    >
+                      <i className={`bi ${t.icon}`} style={{ fontSize: 12 }}></i>
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
             </Col>
-            <Col md={6}>
-              <Label>Country</Label>
+
+            <Col xs={12}>
+              <FieldLabel>Country</FieldLabel>
               <Form.Control
                 value={form.country} onChange={(e) => set('country', e.target.value)}
                 placeholder="e.g. United Arab Emirates"
-                style={{ fontSize: 13, background: 'var(--surface-2)', border: '1px solid var(--border-soft)', borderRadius: 8 }}
+                style={fieldStyle}
               />
             </Col>
+
             <Col md={6}>
-              <Label>Email</Label>
-              <div style={{ position: 'relative' }}>
-                <i className="bi bi-envelope" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--bs-secondary-color)', fontSize: 13, pointerEvents: 'none' }}></i>
-                <Form.Control
-                  type="email" value={form.email} onChange={(e) => set('email', e.target.value)}
-                  placeholder="operations@company.com"
-                  style={{ fontSize: 13, paddingLeft: 30, background: 'var(--surface-2)', border: '1px solid var(--border-soft)', borderRadius: 8 }}
-                />
-              </div>
+              <FieldLabel>Email</FieldLabel>
+              <Form.Control
+                type="email" value={form.email} onChange={(e) => set('email', e.target.value)}
+                placeholder="ops@company.com"
+                style={fieldStyle}
+              />
             </Col>
+
             <Col md={6}>
-              <Label>Phone</Label>
-              <div style={{ position: 'relative' }}>
-                <i className="bi bi-telephone" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--bs-secondary-color)', fontSize: 13, pointerEvents: 'none' }}></i>
-                <Form.Control
-                  value={form.phone} onChange={(e) => set('phone', e.target.value)}
-                  placeholder="+971 4 000 0000"
-                  style={{ fontSize: 13, paddingLeft: 30, background: 'var(--surface-2)', border: '1px solid var(--border-soft)', borderRadius: 8 }}
-                />
-              </div>
+              <FieldLabel>Phone</FieldLabel>
+              <Form.Control
+                value={form.phone} onChange={(e) => set('phone', e.target.value)}
+                placeholder="+971 4 000 0000"
+                style={fieldStyle}
+              />
             </Col>
           </Row>
         </Modal.Body>
 
-        <Modal.Footer style={{ padding: '12px 20px', borderTop: '1px solid var(--border-soft)', gap: 8 }}>
+        <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button type="button" className="ss-action-btn" onClick={onHide} disabled={submitting}>Cancel</button>
           <button type="submit" className="ss-action-btn ss-action-btn-primary" disabled={submitting}>
             {submitting
@@ -161,7 +194,7 @@ const NewClientModal = ({ show, onHide, onCreated }) => {
               : <><i className="bi bi-plus-lg me-2"></i>Create Client</>
             }
           </button>
-        </Modal.Footer>
+        </div>
       </Form>
     </Modal>
   );
@@ -210,22 +243,6 @@ export const ClientsList = () => {
           <div className="ss-page-header-icon"><i className="bi bi-building"></i></div>
           <div>
             <h4 className="ss-page-title">Clients</h4>
-            <div className="ss-page-sub" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 700, color: 'var(--bs-body-color)' }}>{clients.length}</span>
-              <span>total</span>
-              {clients.length > 0 && (
-                <>
-                  <span style={{ opacity: 0.4 }}>·</span>
-                  {Object.entries(
-                    clients.reduce((acc, c) => { acc[c.type] = (acc[c.type] || 0) + 1; return acc; }, {})
-                  ).slice(0, 4).map(([type, count]) => (
-                    <span key={type} style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: `${TYPE_COLOR[type] || '#6c757d'}15`, color: TYPE_COLOR[type] || '#6c757d' }}>
-                      {count} {type}
-                    </span>
-                  ))}
-                </>
-              )}
-            </div>
           </div>
         </div>
         <div className="d-flex gap-2 align-items-center">
@@ -262,13 +279,11 @@ export const ClientsList = () => {
             onClick={() => setTypeFilter(typeFilter === f.key ? '' : f.key)}
           >
             {f.label}
-            {f.key && clients.length > 0 && (
-              <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 800, opacity: .7 }}>
-                {clients.filter((c) => c.type === f.key).length}
-              </span>
-            )}
           </button>
         ))}
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--bs-secondary-color)', alignSelf: 'center' }}>
+          {clients.length} {clients.length === 1 ? 'client' : 'clients'}
+        </span>
       </div>
 
       <NewClientModal show={showNew} onHide={() => setShowNew(false)} onCreated={handleCreated} />
@@ -453,12 +468,6 @@ const EditClientModal = ({ client, show, onHide, onSaved }) => {
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  const Label = ({ children }) => (
-    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--bs-secondary-color)', marginBottom: 6 }}>
-      {children}
-    </div>
-  );
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true); setError('');
@@ -480,78 +489,87 @@ const EditClientModal = ({ client, show, onHide, onSaved }) => {
 
   return (
     <Modal show={show} onHide={onHide} centered size="md">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'color-mix(in srgb, #1a56db 12%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1a56db', fontSize: 16 }}>
-            <i className="bi bi-pencil-square"></i>
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>Edit Client</div>
-            <div style={{ fontSize: 11.5, color: 'var(--bs-secondary-color)' }}>{client.clientCode}</div>
-          </div>
+      <div style={{ padding: '22px 24px 16px', borderBottom: '1px solid var(--border-soft)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 16.5, letterSpacing: '-0.01em' }}>Edit Client</div>
+          <div style={{ fontSize: 13, color: 'var(--bs-secondary-color)', marginTop: 3, fontFamily: 'monospace' }}>{client.clientCode}</div>
         </div>
-        <button type="button" onClick={onHide} style={{ background: 'none', border: 'none', fontSize: 18, color: 'var(--bs-secondary-color)', cursor: 'pointer', padding: 4, lineHeight: 1 }}>
+        <button type="button" onClick={onHide} style={{ background: 'none', border: 'none', fontSize: 15, color: 'var(--bs-secondary-color)', cursor: 'pointer', padding: '3px 4px', lineHeight: 1, marginTop: 2 }}>
           <i className="bi bi-x-lg"></i>
         </button>
       </div>
 
       <Form onSubmit={handleSubmit}>
-        <Modal.Body style={{ padding: '16px 20px 20px' }}>
-          {error && <Alert variant="danger" className="py-2 mb-3" style={{ fontSize: 13 }}>{error}</Alert>}
+        <Modal.Body style={{ padding: '20px 24px' }}>
+          {error && (
+            <div style={{ fontSize: 12.5, color: '#dc2626', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', marginBottom: 16 }}>
+              <i className="bi bi-exclamation-circle me-2"></i>{error}
+            </div>
+          )}
           <Row className="g-3">
             <Col md={8}>
-              <Label>Company Name *</Label>
+              <FieldLabel>Company Name <span style={{ color: '#ef4444' }}>*</span></FieldLabel>
               <Form.Control
                 value={form.companyName} onChange={(e) => set('companyName', e.target.value)} required
-                style={{ fontSize: 13, background: 'var(--surface-2)', border: '1px solid var(--border-soft)', borderRadius: 8 }}
+                style={fieldStyle}
               />
             </Col>
             <Col md={4}>
-              <Label>Status</Label>
-              <Form.Select value={form.status} onChange={(e) => set('status', e.target.value)}
-                style={{ fontSize: 13, background: 'var(--surface-2)', border: '1px solid var(--border-soft)', borderRadius: 8 }}>
+              <FieldLabel>Status</FieldLabel>
+              <Form.Select value={form.status} onChange={(e) => set('status', e.target.value)} style={fieldStyle}>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
                 <option value="suspended">Suspended</option>
               </Form.Select>
             </Col>
-            <Col md={6}>
-              <Label>Client Type</Label>
-              <Form.Select value={form.type} onChange={(e) => set('type', e.target.value)}
-                style={{ fontSize: 13, background: 'var(--surface-2)', border: '1px solid var(--border-soft)', borderRadius: 8 }}>
-                {CLIENT_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-              </Form.Select>
+            <Col xs={12}>
+              <FieldLabel>Client Type</FieldLabel>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                {CLIENT_TYPE_OPTIONS.map((t) => {
+                  const active = form.type === t.value;
+                  return (
+                    <button
+                      key={t.value} type="button" onClick={() => set('type', t.value)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '6px 13px', borderRadius: 8, fontSize: 12.5, fontWeight: 500, cursor: 'pointer',
+                        border: active ? '1.5px solid var(--brand)' : '1.5px solid var(--border-soft)',
+                        background: active ? 'color-mix(in srgb, var(--brand) 8%, var(--surface-2))' : 'var(--surface-2)',
+                        color: active ? 'var(--brand)' : 'var(--bs-secondary-color)',
+                        transition: 'all 0.12s',
+                      }}
+                    >
+                      <i className={`bi ${t.icon}`} style={{ fontSize: 12 }}></i>
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
             </Col>
-            <Col md={6}>
-              <Label>Country</Label>
+            <Col xs={12}>
+              <FieldLabel>Country</FieldLabel>
               <Form.Control
                 value={form.country} onChange={(e) => set('country', e.target.value)}
-                style={{ fontSize: 13, background: 'var(--surface-2)', border: '1px solid var(--border-soft)', borderRadius: 8 }}
+                style={fieldStyle}
               />
             </Col>
             <Col md={6}>
-              <Label>Email</Label>
-              <div style={{ position: 'relative' }}>
-                <i className="bi bi-envelope" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--bs-secondary-color)', fontSize: 13, pointerEvents: 'none' }}></i>
-                <Form.Control
-                  type="email" value={form.email} onChange={(e) => set('email', e.target.value)}
-                  style={{ fontSize: 13, paddingLeft: 30, background: 'var(--surface-2)', border: '1px solid var(--border-soft)', borderRadius: 8 }}
-                />
-              </div>
+              <FieldLabel>Email</FieldLabel>
+              <Form.Control
+                type="email" value={form.email} onChange={(e) => set('email', e.target.value)}
+                style={fieldStyle}
+              />
             </Col>
             <Col md={6}>
-              <Label>Phone</Label>
-              <div style={{ position: 'relative' }}>
-                <i className="bi bi-telephone" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--bs-secondary-color)', fontSize: 13, pointerEvents: 'none' }}></i>
-                <Form.Control
-                  value={form.phone} onChange={(e) => set('phone', e.target.value)}
-                  style={{ fontSize: 13, paddingLeft: 30, background: 'var(--surface-2)', border: '1px solid var(--border-soft)', borderRadius: 8 }}
-                />
-              </div>
+              <FieldLabel>Phone</FieldLabel>
+              <Form.Control
+                value={form.phone} onChange={(e) => set('phone', e.target.value)}
+                style={fieldStyle}
+              />
             </Col>
           </Row>
         </Modal.Body>
-        <Modal.Footer style={{ padding: '12px 20px', borderTop: '1px solid var(--border-soft)', gap: 8 }}>
+        <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button type="button" className="ss-action-btn" onClick={onHide} disabled={submitting}>Cancel</button>
           <button type="submit" className="ss-action-btn ss-action-btn-primary" disabled={submitting}>
             {submitting
@@ -559,7 +577,7 @@ const EditClientModal = ({ client, show, onHide, onSaved }) => {
               : <><i className="bi bi-check-lg me-2"></i>Save Changes</>
             }
           </button>
-        </Modal.Footer>
+        </div>
       </Form>
     </Modal>
   );

@@ -98,18 +98,15 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen, onMobileClose }) => {
       <aside className={`app-sidebar${collapsed ? ' collapsed' : ''}${mobileOpen ? ' mobile-open' : ''}`}>
         {/* Brand */}
         <a className="sidebar-brand" href="/" onClick={(e) => { e.preventDefault(); navigate('/dashboard'); }}>
-          <div className="sidebar-brand-icon" style={{ background: 'linear-gradient(135deg, #1a56db 0%, #7c3aed 100%)', boxShadow: '0 4px 14px rgba(124,58,237,0.45)' }}>
+          <div className="sidebar-brand-icon" style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)', boxShadow: '0 4px 14px rgba(79,70,229,0.45)' }}>
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="3" y="3" width="14" height="3.5" rx="1.5" fill="white"/>
-              <rect x="3" y="8.25" width="10" height="3.5" rx="1.5" fill="white" fillOpacity="0.75"/>
-              <rect x="3" y="13.5" width="7" height="3.5" rx="1.5" fill="white" fillOpacity="0.5"/>
+              <path d="M4 17V3h7a3.5 3.5 0 0 1 0 7H4" stroke="white" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M10.5 10L15 17" stroke="white" strokeWidth="2.1" strokeLinecap="round"/>
             </svg>
           </div>
           <div className="sidebar-brand-text">
-            <span className="sidebar-brand-name">
-              Freight<span style={{ color: '#7c9ef8', fontWeight: 500 }}>ERP</span>
-            </span>
-            <span className="sidebar-brand-tagline">Operations Suite</span>
+            <span className="sidebar-brand-name">Reliq</span>
+            <span className="sidebar-brand-tagline">Logistics Platform</span>
           </div>
         </a>
 

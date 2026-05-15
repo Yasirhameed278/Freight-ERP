@@ -52,7 +52,12 @@ const Register = () => {
       <div className="auth-card" style={{ maxWidth: 540 }}>
         {/* Brand */}
         <div className="brand">
-          <div className="logo"><i className="bi bi-box-seam"></i></div>
+          <div className="logo">
+            <svg width="30" height="30" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 17V3h7a3.5 3.5 0 0 1 0 7H4" stroke="white" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M10.5 10L15 17" stroke="white" strokeWidth="2.1" strokeLinecap="round"/>
+            </svg>
+          </div>
           <h1>Create your account</h1>
           <div className="subtitle">Customer portal — track your shipments</div>
         </div>

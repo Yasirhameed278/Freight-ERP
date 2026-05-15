@@ -228,7 +228,7 @@ const Layout = () => {
   const meta = PAGE_META[pathname]
     || (pathname.startsWith('/shipments/') ? { title: 'Shipment Detail', icon: 'bi-box', crumbs: ['Operations', 'Shipments', 'Detail'] } : null)
     || (pathname.startsWith('/clients/')   ? { title: 'Client 360',      icon: 'bi-building', crumbs: ['CRM', 'Clients', '360 View'] } : null)
-    || { title: 'Freight ERP', icon: 'bi-truck', crumbs: [] };
+    || { title: 'Reliq', icon: 'bi-grid', crumbs: [] };
 
   const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
   const roleColor = ROLE_COLOR[user?.role] || '#1a56db';

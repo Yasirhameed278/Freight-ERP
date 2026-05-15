@@ -34,9 +34,14 @@ const Login = () => {
       <div className="auth-card">
         {/* Brand */}
         <div className="brand">
-          <div className="logo"><i className="bi bi-truck"></i></div>
+          <div className="logo">
+            <svg width="30" height="30" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 17V3h7a3.5 3.5 0 0 1 0 7H4" stroke="white" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M10.5 10L15 17" stroke="white" strokeWidth="2.1" strokeLinecap="round"/>
+            </svg>
+          </div>
           <h1>Welcome back</h1>
-          <div className="subtitle">Sign in to your Freight ERP account</div>
+          <div className="subtitle">Sign in to your Reliq account</div>
         </div>
 
         {/* Error */}
