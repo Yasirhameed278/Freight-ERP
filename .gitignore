@@ -37,3 +37,7 @@ coverage/
 
 # MongoDB binary cache (mongodb-memory-server)
 .cache/mongodb-memory-server/
+
+# Backup files
+*.bak
+*.backup
