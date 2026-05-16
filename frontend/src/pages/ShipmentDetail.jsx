@@ -1,8 +1,9 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Row, Col, Button, Modal, Form, Alert } from 'react-bootstrap';
-import { shipmentsApi, documentsApi } from '../api';
+import { shipmentsApi, documentsApi, tasksApi, usersApi } from '../api';
 import { useAuth } from '../context/AuthContext';
+import VesselMap from '../components/tracking/VesselMap';
 
 /* ── helpers ──────────────────────────────────────────────── */
 const fmt = (d) =>
@@ -178,6 +179,270 @@ const ApprovalModal = ({ shipmentId, action, onClose, onSaved }) => {
   );
 };
 
+/* ── Tracking Panel ───────────────────────────────────────── */
+const EVT_ICON = {
+  completed: { icon: 'bi-check-circle-fill', color: '#16a34a' },
+  detected:  { icon: 'bi-broadcast',         color: '#2563eb' },
+};
+
+const TrackingPanel = ({ shipmentId, shipment }) => {
+  const [tracking, setTracking] = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const data = await shipmentsApi.getTracking(shipmentId);
+      setTracking(data);
+    } catch (ex) {
+      setError(ex.response?.data?.message || 'Failed to fetch tracking data');
+    } finally { setLoading(false); }
+  }, [shipmentId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return (
+    <div className="ss-loading" style={{ minHeight: 180 }}>
+      <div className="dashboard-loader">
+        <div className="dashboard-loader-ring"></div>
+        <i className="bi bi-broadcast dashboard-loader-icon"></i>
+      </div>
+      <span>Fetching tracking data…</span>
+    </div>
+  );
+  if (error) return <div className="alert alert-danger">{error}</div>;
+  if (!tracking) return null;
+
+  const showMap = tracking.origin && tracking.destination && tracking.vesselPosition;
+  const sortedEvents = [...(tracking.events || [])].sort(
+    (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+  );
+
+  return (
+    <div>
+      {/* Header strip */}
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>
+            Provider:{' '}
+            <span style={{ color: 'var(--brand)', textTransform: 'capitalize' }}>
+              {tracking.provider}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--bs-secondary-color)' }}>
+            {tracking.trackingNumber && <>Ref: {tracking.trackingNumber}</>}
+            {shipment.lastTrackingUpdate && (
+              <> · Updated {fmt(shipment.lastTrackingUpdate)}</>
+            )}
+          </div>
+        </div>
+        <button className="ss-action-btn" onClick={load}>
+          <i className="bi bi-arrow-clockwise me-2"></i>Refresh
+        </button>
+      </div>
+
+      {/* Map */}
+      {showMap && (
+        <div className="mb-4">
+          <VesselMap
+            origin={tracking.origin}
+            destination={tracking.destination}
+            vesselPosition={tracking.vesselPosition}
+            mode={shipment.mode}
+          />
+        </div>
+      )}
+
+      {/* Events timeline */}
+      <div className="sd-section-title">Tracking Events</div>
+      {sortedEvents.length === 0 ? (
+        <div className="dash-empty-state">
+          <i className="bi bi-broadcast"></i>
+          <div>No tracking events yet</div>
+          <small style={{ color: 'var(--bs-secondary-color)' }}>
+            Events appear once the carrier reports activity
+          </small>
+        </div>
+      ) : (
+        <div className="milestone-timeline">
+          {sortedEvents.map((ev, i) => {
+            const meta = EVT_ICON[ev.status] || EVT_ICON.detected;
+            return (
+              <div key={i} className="milestone-item done">
+                <span className="milestone-dot completed"></span>
+                <div className="flex-grow-1">
+                  <div className="d-flex align-items-center gap-2 flex-wrap">
+                    <i className={`bi ${meta.icon}`} style={{ color: meta.color, fontSize: 14 }}></i>
+                    <span className="fw-semibold" style={{ fontSize: 13 }}>{ev.event}</span>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
+                      background: meta.color + '22', color: meta.color,
+                    }}>{ev.status}</span>
+                  </div>
+                  <div className="small text-muted ms-4 mt-1">
+                    {ev.location && <><i className="bi bi-geo-alt me-1"></i>{ev.location} · </>}
+                    {fmt(ev.timestamp)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ── Tasks Panel ───────────────────────────────────────────── */
+const PRIORITY_META = {
+  urgent: { color: '#dc2626', bg: '#fef2f2' },
+  high:   { color: '#d97706', bg: '#fffbeb' },
+  normal: { color: '#2563eb', bg: '#eff6ff' },
+  low:    { color: '#6b7280', bg: '#f9fafb' },
+};
+
+function SlaBadge({ dueAt, status, slaBreached }) {
+  if (!dueAt || status === 'done' || status === 'cancelled') return null;
+  const diff = new Date(dueAt) - Date.now();
+  const hrs  = diff / 3600000;
+  if (slaBreached || hrs < 0) {
+    return <span className="badge rounded-pill ms-2" style={{ background: '#fef2f2', color: '#dc2626', fontSize: 10 }}>Overdue</span>;
+  }
+  if (hrs < 24) return <span className="badge rounded-pill ms-2" style={{ background: '#fffbeb', color: '#d97706', fontSize: 10 }}>{Math.round(hrs)}h left</span>;
+  return <span className="badge rounded-pill ms-2" style={{ background: '#f0fdf4', color: '#059669', fontSize: 10 }}>{Math.round(hrs / 24)}d left</span>;
+}
+
+const TasksPanel = ({ shipmentId, shipmentNumber }) => {
+  const [tasks, setTasks]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers]   = useState([]);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm]     = useState({ title: '', priority: 'normal', assignedTo: '', dueAt: '' });
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await tasksApi.list({ linkedKind: 'Shipment', linkedId: shipmentId, status: 'open,in_progress,done', limit: 50 });
+      setTasks(d.items);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, [shipmentId]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    usersApi.list({ limit: 100 }).then((d) => setUsers(d.items || d.users || [])).catch(() => {});
+  }, []);
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await tasksApi.create({
+        title: form.title,
+        priority: form.priority,
+        assignedTo: form.assignedTo || undefined,
+        dueAt: form.dueAt || undefined,
+        linkedTo: { kind: 'Shipment', id: shipmentId, label: shipmentNumber },
+      });
+      setForm({ title: '', priority: 'normal', assignedTo: '', dueAt: '' });
+      setCreating(false);
+      load();
+    } catch { /* ignore */ }
+    finally { setSaving(false); }
+  };
+
+  const quickDone = async (taskId) => {
+    await tasksApi.complete(taskId);
+    load();
+  };
+
+  if (loading) return <div className="text-center py-4"><div className="spinner-border spinner-border-sm text-primary" /></div>;
+
+  return (
+    <div>
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <span className="text-muted small">{tasks.length} task{tasks.length !== 1 ? 's' : ''} linked to this shipment</span>
+        <button className="btn btn-sm btn-outline-primary" onClick={() => setCreating((x) => !x)}>
+          <i className="bi bi-plus me-1" />Add Task
+        </button>
+      </div>
+
+      {creating && (
+        <form onSubmit={handleCreate} className="card border-0 bg-light rounded-3 p-3 mb-3">
+          <div className="row g-2">
+            <div className="col-12">
+              <input className="form-control form-control-sm" placeholder="Task title…" value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} required />
+            </div>
+            <div className="col-md-4">
+              <select className="form-select form-select-sm" value={form.priority}
+                onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}>
+                {['low','normal','high','urgent'].map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div className="col-md-4">
+              <select className="form-select form-select-sm" value={form.assignedTo}
+                onChange={(e) => setForm((f) => ({ ...f, assignedTo: e.target.value }))}>
+                <option value="">Unassigned</option>
+                {users.map((u) => <option key={u._id} value={u._id}>{u.name}</option>)}
+              </select>
+            </div>
+            <div className="col-md-4">
+              <input type="datetime-local" className="form-control form-control-sm" value={form.dueAt}
+                onChange={(e) => setForm((f) => ({ ...f, dueAt: e.target.value }))} />
+            </div>
+            <div className="col-12 d-flex gap-2">
+              <button type="submit" className="btn btn-sm btn-primary" disabled={saving}>
+                {saving ? 'Saving…' : 'Create Task'}
+              </button>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setCreating(false)}>Cancel</button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {tasks.length === 0 && !creating && (
+        <div className="text-center text-muted py-5">
+          <i className="bi bi-check2-square d-block mb-2" style={{ fontSize: 32 }} />
+          No tasks yet — create one or configure workflow rules to generate them automatically.
+        </div>
+      )}
+
+      <div className="d-flex flex-column gap-2">
+        {tasks.map((task) => {
+          const pm = PRIORITY_META[task.priority] || PRIORITY_META.normal;
+          const done = task.status === 'done' || task.status === 'cancelled';
+          return (
+            <div key={task._id} className={`card border-0 shadow-sm ${done ? 'opacity-50' : ''}`} style={{ borderRadius: 8 }}>
+              <div className="card-body py-2 px-3 d-flex align-items-center gap-3">
+                <button className="btn btn-sm p-0" style={{ lineHeight: 1 }} onClick={() => !done && quickDone(task._id)}
+                  title={done ? task.status : 'Mark done'}>
+                  <i className={`bi ${done ? 'bi-check-circle-fill text-success' : 'bi-circle text-muted'}`} style={{ fontSize: 18 }} />
+                </button>
+                <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                  <div className={`fw-semibold ${done ? 'text-decoration-line-through text-muted' : ''}`} style={{ fontSize: 13 }}>
+                    {task.title}
+                    <SlaBadge dueAt={task.dueAt} status={task.status} slaBreached={task.slaBreached} />
+                  </div>
+                  <div className="text-muted" style={{ fontSize: 11 }}>
+                    {task.assignedTo?.name && <><i className="bi bi-person me-1" />{task.assignedTo.name} · </>}
+                    {task.dueAt && new Date(task.dueAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </div>
+                </div>
+                <span className="badge rounded-pill flex-shrink-0" style={{ background: pm.bg, color: pm.color, fontSize: 10 }}>
+                  {task.priority}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 /* ── Main Component ───────────────────────────────────────── */
 const ShipmentDetail = () => {
   const { id } = useParams();
@@ -264,9 +529,14 @@ const ShipmentDetail = () => {
   const TABS = [
     { key: 'overview',   label: 'Overview',   icon: 'bi-info-circle' },
     { key: 'milestones', label: 'Milestones', icon: 'bi-signpost-split', badge: totalMs },
+    { key: 'tracking',   label: 'Tracking',   icon: 'bi-broadcast',
+      show: ['sea', 'air', 'multimodal'].includes(shipment?.mode) },
+    { key: 'tasks',      label: 'Tasks',      icon: 'bi-check2-square' },
     { key: 'charges',    label: 'Charges',    icon: 'bi-currency-dollar', badge: charges.length, roles: ['admin','manager','operations','sales','finance'] },
     { key: 'documents',  label: 'Documents',  icon: 'bi-file-earmark-text', badge: docs.length },
-  ].filter((t) => !t.roles || t.roles.includes(user?.role));
+  ]
+    .filter((t) => !t.roles || t.roles.includes(user?.role))
+    .filter((t) => t.show === undefined || t.show);
 
   return (
     <div>
@@ -571,6 +841,16 @@ const ShipmentDetail = () => {
                 </Col>
               )}
             </Row>
+          )}
+
+          {/* ── TRACKING ── */}
+          {activeTab === 'tracking' && (
+            <TrackingPanel shipmentId={shipment._id} shipment={shipment} />
+          )}
+
+          {/* ── TASKS ── */}
+          {activeTab === 'tasks' && (
+            <TasksPanel shipmentId={shipment._id} shipmentNumber={shipment.shipmentNumber} />
           )}
 
           {/* ── CHARGES ── */}

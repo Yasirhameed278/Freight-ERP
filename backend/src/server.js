@@ -1,14 +1,17 @@
 require('dotenv').config();
+require('./config/validateEnv')(); // fail fast on missing required env vars
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const morgan = require('morgan');
 const compression = require('compression');
 const cookieParser = require('cookie-parser');
 const mongoose = require('mongoose');
 
 const connectDB = require('./config/db');
+const logger = require('./utils/logger');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
+const { globalLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
 
@@ -27,47 +30,53 @@ app.use(
 );
 app.options('*', cors());
 app.use(helmet({ crossOriginResourcePolicy: false }));
-app.use(compression());
+app.use(compression({
+  filter: (req, res) => {
+    if (req.headers.accept === 'text/event-stream') return false;
+    return compression.filter(req, res);
+  },
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-if (process.env.NODE_ENV !== 'production') {
-  app.use(morgan('dev'));
-}
+/* Structured request logging (replaces morgan) */
+app.use(logger.requestMiddleware);
+
+/* Global rate limit — applied before all routes */
+app.use(globalLimiter);
 
 /* ---------- Health & Root ---------- */
 app.get('/', (req, res) => {
-  res.json({
-    name: 'Freight Forwarding ERP API',
-    version: '1.0.0',
-    status: 'running',
-  });
+  res.json({ name: 'Freight Forwarding ERP API', version: '1.0.0', status: 'running' });
 });
 
 app.get('/api/health', (req, res) => {
-  const dbState = mongoose.connection.readyState;
-  const dbStateMap = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
+  const states = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    database: dbStateMap[dbState] || 'unknown',
+    database: states[mongoose.connection.readyState] || 'unknown',
     environment: process.env.NODE_ENV || 'development',
   });
 });
 
 /* ---------- Routes ---------- */
-app.use('/api/auth',       require('./routes/authRoutes'));
-app.use('/api/clients',    require('./routes/clientRoutes'));
-app.use('/api/shipments',  require('./routes/shipmentRoutes'));
-app.use('/api/deals',      require('./routes/dealRoutes'));
-app.use('/api/documents',  require('./routes/documentRoutes'));
-app.use('/api/rates',      require('./routes/rateRoutes'));
-app.use('/api/quotes',     require('./routes/quoteRoutes'));
-app.use('/api/invoices',   require('./routes/invoiceRoutes'));
-app.use('/api/analytics',  require('./routes/analyticsRoutes'));
-app.use('/api/activities', require('./routes/activityRoutes'));
+app.use('/api/auth',           require('./routes/authRoutes'));
+app.use('/api/clients',        require('./routes/clientRoutes'));
+app.use('/api/shipments',      require('./routes/shipmentRoutes'));
+app.use('/api/deals',          require('./routes/dealRoutes'));
+app.use('/api/documents',      require('./routes/documentRoutes'));
+app.use('/api/rates',          require('./routes/rateRoutes'));
+app.use('/api/quotes',         require('./routes/quoteRoutes'));
+app.use('/api/invoices',       require('./routes/invoiceRoutes'));
+app.use('/api/analytics',      require('./routes/analyticsRoutes'));
+app.use('/api/activities',     require('./routes/activityRoutes'));
+app.use('/api/notifications',  require('./routes/notificationRoutes'));
+app.use('/api/portal',         require('./routes/portalRoutes'));
+app.use('/api/tasks',          require('./routes/taskRoutes'));
+app.use('/api/workflows',      require('./routes/workflowRoutes'));
 
 /* ---------- Error Handlers (must be last) ---------- */
 app.use(notFound);
@@ -79,31 +88,31 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await connectDB();
+    require('./services/cronJobs').startCronJobs();
+    require('./services/trackingPoller').startTrackingPoller();
     const server = app.listen(PORT, () => {
-      console.log(
-        `🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`
-      );
+      logger.info(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
     });
 
     const shutdown = (signal) => {
-      console.log(`\n${signal} received. Shutting down gracefully...`);
+      logger.info(`${signal} received. Shutting down gracefully...`);
       server.close(() => {
         mongoose.connection.close(false).then(() => {
-          console.log('Closed all connections.');
+          logger.info('Closed all connections.');
           process.exit(0);
         });
       });
     };
     process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGINT',  () => shutdown('SIGINT'));
   } catch (err) {
-    console.error('❌ Failed to start server:', err);
+    logger.error('Failed to start server', { error: err.message, stack: err.stack });
     process.exit(1);
   }
 };
 
 process.on('unhandledRejection', (err) => {
-  console.error('UNHANDLED REJECTION:', err);
+  logger.error('UNHANDLED REJECTION', { error: err?.message, stack: err?.stack });
   process.exit(1);
 });
 

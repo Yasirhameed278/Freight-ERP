@@ -3,7 +3,7 @@ const router = express.Router();
 const {
   listShipments, getShipment, createShipment, updateShipment,
   updateMilestone, addMilestone, deleteShipment,
-  approveShipment, rejectShipment, generateBL,
+  approveShipment, rejectShipment, generateBL, getTracking,
 } = require('../controllers/shipmentController');
 const { protect, authorize, applyScope } = require('../middleware/auth');
 
@@ -23,6 +23,7 @@ router.route('/:id')
   .patch(authorize(...STAFF), updateShipment)
   .delete(authorize('admin', 'manager'), deleteShipment);
 
+router.get( '/:id/tracking', getTracking);
 router.post('/:id/approve',  authorize(...APPROVER), approveShipment);
 router.post('/:id/reject',   authorize(...APPROVER), rejectShipment);
 router.get( '/:id/bl-pdf',   authorize(...STAFF),    generateBL);

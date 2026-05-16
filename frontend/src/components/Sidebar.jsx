@@ -46,6 +46,13 @@ const NAV = [
     ],
   },
   {
+    section: 'Workflow',
+    items: [
+      { to: '/tasks',     label: 'Tasks',           icon: 'bi-check2-square', roles: ['admin', 'manager', 'sales', 'operations', 'finance', 'customer_service'] },
+      { to: '/workflows', label: 'Workflow Rules',  icon: 'bi-diagram-3',     roles: ['admin', 'manager'] },
+    ],
+  },
+  {
     section: 'Admin',
     items: [
       { to: '/users', label: 'Users', icon: 'bi-people', roles: ['admin', 'manager'] },

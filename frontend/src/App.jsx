@@ -1,6 +1,10 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import PortalHome from './pages/portal/PortalHome';
+import QuoteView from './pages/portal/QuoteView';
+import Tasks from './pages/Tasks';
+import WorkflowRules from './pages/WorkflowRules';
 import Dashboard from './pages/Dashboard';
 import Kanban from './pages/Kanban';
 import Shipments from './pages/Shipments';
@@ -31,6 +35,10 @@ const App = () => {
 
   return (
     <Routes>
+      {/* Public portal — no auth required */}
+      <Route path="/portal"              element={<PortalHome />} />
+      <Route path="/portal/quote/:token" element={<QuoteView />} />
+
       <Route path="/login"    element={isAuthenticated ? <HomeRedirect /> : <Login />} />
       <Route path="/register" element={isAuthenticated ? <HomeRedirect /> : <Register />} />
 
@@ -125,6 +133,14 @@ const App = () => {
         <Route path="/rates" element={
           <RoleRoute roles={['admin', 'manager', 'sales', 'operations']}>
             <RateSearch />
+          </RoleRoute>
+        } />
+
+        {/* Workflow & Tasks */}
+        <Route path="/tasks" element={<Tasks />} />
+        <Route path="/workflows" element={
+          <RoleRoute roles={['admin', 'manager', 'sales', 'operations', 'finance', 'customer_service']}>
+            <WorkflowRules />
           </RoleRoute>
         } />
 

@@ -143,6 +143,19 @@ exports.moveDeal = asyncHandler(async (req, res) => {
 
   await deal.save();
 
+  if (fromStage !== stage) {
+    const notify = require('../services/notificationService');
+    notify.create(req.user._id, {
+      type: 'deal_stage',
+      title: `Deal moved to ${stage}`,
+      body: `${deal.dealCode} advanced from ${fromStage} → ${stage}`,
+      metadata: { dealId: deal._id, dealCode: deal.dealCode, fromStage, toStage: stage },
+    }).catch(() => {});
+
+    const wf = require('../services/workflowEngine');
+    wf.fire({ entity: deal, entityType: 'Deal', event: 'stage_changed', context: { actorId: req.user._id } }).catch(() => {});
+  }
+
   res.json({ success: true, deal });
 });
 

@@ -63,6 +63,9 @@ const userSchema = new mongoose.Schema(
 
     twoFactorEnabled: { type: Boolean, default: false },
     twoFactorSecret: { type: String, select: false },
+
+    /* Refresh-token version — increment to revoke all issued refresh tokens */
+    tokenVersion: { type: Number, default: 0, select: false },
   },
   {
     timestamps: true,
@@ -112,5 +115,7 @@ userSchema.methods.changedPasswordAfter = function (jwtTimestamp) {
   }
   return false;
 };
+
+userSchema.index({ role: 1, status: 1 });
 
 module.exports = mongoose.model('User', userSchema);

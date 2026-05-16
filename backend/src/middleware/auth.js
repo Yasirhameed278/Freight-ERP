@@ -7,8 +7,15 @@ const protect = asyncHandler(async (req, res, next) => {
   let token;
   if (req.headers.authorization?.startsWith('Bearer ')) {
     token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies?.accessToken) {
+    // New short-lived access token cookie
+    token = req.cookies.accessToken;
   } else if (req.cookies?.token) {
+    // Legacy cookie (backward compat during migration)
     token = req.cookies.token;
+  } else if (req.query.token) {
+    // EventSource (SSE) cannot send headers — token passed as query param
+    token = req.query.token;
   }
 
   if (!token) {

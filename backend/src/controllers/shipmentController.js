@@ -141,6 +141,34 @@ exports.updateMilestone = asyncHandler(async (req, res) => {
   }
 
   await shipment.save();
+
+  if (status === 'completed') {
+    const notify = require('../services/notificationService');
+    notify.create(req.user._id, {
+      type: 'shipment_milestone',
+      title: `Milestone completed: ${milestone.event}`,
+      body: `${shipment.shipmentNumber}${location ? ' · ' + location : ''}`,
+      metadata: { shipmentId: shipment._id, shipmentNumber: shipment.shipmentNumber, milestone: milestone.event },
+    }).catch(() => {});
+
+    const wf = require('../services/workflowEngine');
+    wf.fire({
+      entity: shipment, entityType: 'Shipment',
+      event: 'milestone_completed',
+      context: { actorId: req.user._id },
+    }).catch(() => {});
+  }
+
+  // Fire status_changed if milestone updated the shipment status
+  if (status === 'completed' && shipment.status) {
+    const wf = require('../services/workflowEngine');
+    wf.fire({
+      entity: shipment, entityType: 'Shipment',
+      event: 'status_changed',
+      context: { actorId: req.user._id },
+    }).catch(() => {});
+  }
+
   res.json({ success: true, shipment });
 });
 
@@ -165,6 +193,10 @@ exports.approveShipment = asyncHandler(async (req, res) => {
   shipment.approvalNote   = req.body.note || '';
   if (shipment.status === 'quote') shipment.status = 'booked';
   await shipment.save();
+
+  const wf = require('../services/workflowEngine');
+  wf.fire({ entity: shipment, entityType: 'Shipment', event: 'status_changed', context: { actorId: req.user._id } }).catch(() => {});
+
   res.json({ success: true, shipment });
 });
 
@@ -212,6 +244,21 @@ exports.generateBL = asyncHandler(async (req, res) => {
   res.send(buffer);
 
   fs.unlink(fullPath).catch(() => {});
+});
+
+exports.getTracking = asyncHandler(async (req, res) => {
+  const shipment = await Shipment.findOne({ _id: req.params.id, ...req.scope });
+  if (!shipment) { res.status(404); throw new Error('Shipment not found or access denied'); }
+
+  const { getTracking } = require('../services/tracking');
+  const tracking = await getTracking(shipment);
+
+  // Persist vessel position and update timestamp
+  const update = { lastTrackingUpdate: new Date() };
+  if (tracking.vesselPosition) update.vesselPosition = tracking.vesselPosition;
+  await Shipment.findByIdAndUpdate(shipment._id, update);
+
+  res.json({ success: true, ...tracking });
 });
 
 exports.deleteShipment = asyncHandler(async (req, res) => {

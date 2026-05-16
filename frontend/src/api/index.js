@@ -99,6 +99,7 @@ export const shipmentsApi = {
   approve:         (id, body)      => api.post(`/shipments/${id}/approve`, body || {}).then((r) => r.data),
   reject:          (id, body)      => api.post(`/shipments/${id}/reject`, body || {}).then((r) => r.data),
   printBL:         (id)            => openPdf(`/shipments/${id}/bl-pdf`),
+  getTracking:     (id)            => api.get(`/shipments/${id}/tracking`).then((r) => r.data),
 };
 
 export const usersApi = {
@@ -106,6 +107,43 @@ export const usersApi = {
   create:     (body)       => api.post('/auth/users', body).then((r) => r.data),
   update:     (id, body)   => api.patch(`/auth/users/${id}`, body).then((r) => r.data),
   deactivate: (id)         => api.post(`/auth/users/${id}/deactivate`).then((r) => r.data),
+};
+
+export const notificationsApi = {
+  list:       (params) => api.get('/notifications', { params }).then((r) => r.data),
+  unreadCount: ()      => api.get('/notifications/unread-count').then((r) => r.data),
+  markRead:   (id)     => api.patch(`/notifications/${id}/read`).then((r) => r.data),
+  markAllRead: ()      => api.patch('/notifications/read-all').then((r) => r.data),
+  remove:     (id)     => api.delete(`/notifications/${id}`).then((r) => r.data),
+};
+
+export const tasksApi = {
+  list:     (params)     => api.get('/tasks', { params }).then((r) => r.data),
+  get:      (id)         => api.get(`/tasks/${id}`).then((r) => r.data),
+  create:   (body)       => api.post('/tasks', body).then((r) => r.data),
+  update:   (id, body)   => api.patch(`/tasks/${id}`, body).then((r) => r.data),
+  start:    (id)         => api.post(`/tasks/${id}/start`).then((r) => r.data),
+  complete: (id)         => api.post(`/tasks/${id}/complete`).then((r) => r.data),
+  remove:   (id)         => api.delete(`/tasks/${id}`).then((r) => r.data),
+  myCounts: ()           => api.get('/tasks/my-counts').then((r) => r.data),
+};
+
+export const workflowsApi = {
+  list:   (params)     => api.get('/workflows', { params }).then((r) => r.data),
+  get:    (id)         => api.get(`/workflows/${id}`).then((r) => r.data),
+  create: (body)       => api.post('/workflows', body).then((r) => r.data),
+  update: (id, body)   => api.patch(`/workflows/${id}`, body).then((r) => r.data),
+  toggle: (id)         => api.post(`/workflows/${id}/toggle`).then((r) => r.data),
+  remove: (id)         => api.delete(`/workflows/${id}`).then((r) => r.data),
+};
+
+export const portalApi = {
+  searchRates:   (body)  => api.post('/portal/rates/search', body).then((r) => r.data),
+  submitQuote:   (body)  => api.post('/portal/quote-request', body).then((r) => r.data),
+  getQuote:      (token) => api.get(`/portal/quote/${token}`).then((r) => r.data),
+  acceptQuote:   (token, body) => api.post(`/portal/quote/${token}/accept`, body).then((r) => r.data),
+  declineQuote:  (token) => api.post(`/portal/quote/${token}/decline`).then((r) => r.data),
+  listRequests:  (params) => api.get('/portal/admin/requests', { params }).then((r) => r.data),
 };
 
 export const documentsApi = {

@@ -98,6 +98,9 @@ exports.sendInvoice = asyncHandler(async (req, res) => {
     invoice.status = 'sent';
     invoice.sentAt = new Date();
     await invoice.save();
+
+    const wf = require('../services/workflowEngine');
+    wf.fire({ entity: invoice, entityType: 'Invoice', event: 'status_changed', context: { actorId: req.user._id } }).catch(() => {});
   }
 
   activity.log({
@@ -153,6 +156,20 @@ exports.recordPayment = asyncHandler(async (req, res) => {
     recordedBy: req.user._id,
   });
   await invoice.save();
+
+  if (invoice.status === 'paid') {
+    const notify = require('../services/notificationService');
+    notify.createForRoles(['admin', 'manager', 'finance'], {
+      type: 'payment_received',
+      title: 'Invoice fully paid',
+      body: `${invoice.invoiceNumber} — ${invoice.currency} ${invoice.total} fully settled`,
+      metadata: { invoiceId: invoice._id, invoiceNumber: invoice.invoiceNumber, amount: invoice.total },
+    }).catch(() => {});
+
+    const wf = require('../services/workflowEngine');
+    wf.fire({ entity: invoice, entityType: 'Invoice', event: 'status_changed', context: { actorId: req.user._id } }).catch(() => {});
+  }
+
   activity.log({ req, entityType: 'Invoice', entityId: invoice._id, action: 'pay',
     summary: `Payment of ${invoice.currency} ${amount} recorded`,
     metadata: { method, reference } });

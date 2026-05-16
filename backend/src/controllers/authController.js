@@ -1,45 +1,54 @@
 const asyncHandler = require('../utils/asyncHandler');
 const User = require('../models/User');
 const Client = require('../models/Client');
-const { signToken } = require('../utils/jwt');
+const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../utils/jwt');
 
-const sendAuth = (user, statusCode, res) => {
-  const token = signToken({ id: user._id, role: user.role });
+/* ── Cookie helpers ──────────────────────────────────────────── */
+const ACCESS_MS  = 15 * 60 * 1000;        // 15 minutes
+const REFRESH_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-  const cookieOptions = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  };
-  res.cookie('token', token, cookieOptions);
-
-  const safeUser = user.toJSON();
-
-  res.status(statusCode).json({
-    success: true,
-    token,
-    user: safeUser,
+const setCookies = (res, accessToken, refreshToken) => {
+  const secure = process.env.NODE_ENV === 'production';
+  res.cookie('accessToken', accessToken, {
+    httpOnly: true, secure, sameSite: 'lax', maxAge: ACCESS_MS,
+  });
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true, secure, sameSite: 'lax', maxAge: REFRESH_MS, path: '/api/auth/refresh',
   });
 };
 
+const clearCookies = (res) => {
+  res.clearCookie('token');
+  res.clearCookie('accessToken');
+  res.clearCookie('refreshToken', { path: '/api/auth/refresh' });
+};
+
+const sendAuth = async (user, statusCode, res) => {
+  // Load tokenVersion (select: false by default)
+  const fullUser = await User.findById(user._id).select('+tokenVersion');
+  const payload = { id: user._id, role: user.role, version: fullUser.tokenVersion };
+
+  const accessToken  = signAccessToken(payload);
+  const refreshToken = signRefreshToken(payload);
+
+  setCookies(res, accessToken, refreshToken);
+
+  res.status(statusCode).json({
+    success: true,
+    token: accessToken, // kept for clients that read Authorization header from localStorage
+    user: user.toJSON(),
+  });
+};
+
+/* ── Auth endpoints ──────────────────────────────────────────── */
 exports.register = asyncHandler(async (req, res) => {
   const { firstName, lastName, email, password, phone, clientCode } = req.body;
-
-  if (!firstName || !lastName || !email || !password) {
-    res.status(400);
-    throw new Error('firstName, lastName, email, password are required');
-  }
 
   if (await User.findOne({ email: email.toLowerCase() })) {
     res.status(409);
     throw new Error('Email already registered');
   }
 
-  if (!clientCode) {
-    res.status(400);
-    throw new Error('clientCode is required for customer registration');
-  }
   const client = await Client.findOne({ clientCode: clientCode.toUpperCase() });
   if (!client) {
     res.status(404);
@@ -47,17 +56,13 @@ exports.register = asyncHandler(async (req, res) => {
   }
 
   const user = await User.create({
-    firstName,
-    lastName,
-    email,
-    password,
-    phone,
+    firstName, lastName, email, password, phone,
     role: 'customer',
     client: client._id,
     status: 'active',
   });
 
-  sendAuth(user, 201, res);
+  await sendAuth(user, 201, res);
 });
 
 exports.createStaffUser = asyncHandler(async (req, res) => {
@@ -86,11 +91,6 @@ exports.createStaffUser = asyncHandler(async (req, res) => {
 exports.login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  if (!email || !password) {
-    res.status(400);
-    throw new Error('Email and password are required');
-  }
-
   const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
   if (!user || !(await user.comparePassword(password))) {
     res.status(401);
@@ -104,7 +104,42 @@ exports.login = asyncHandler(async (req, res) => {
   user.lastLogin = new Date();
   await user.save({ validateBeforeSave: false });
 
-  sendAuth(user, 200, res);
+  await sendAuth(user, 200, res);
+});
+
+exports.refresh = asyncHandler(async (req, res) => {
+  const token = req.cookies?.refreshToken;
+  if (!token) {
+    res.status(401);
+    throw new Error('No refresh token');
+  }
+
+  let decoded;
+  try {
+    decoded = verifyRefreshToken(token);
+  } catch {
+    res.status(401);
+    throw new Error('Invalid or expired refresh token');
+  }
+
+  const user = await User.findById(decoded.id).select('+tokenVersion');
+  if (!user || user.status !== 'active') {
+    res.status(401);
+    throw new Error('User not found or inactive');
+  }
+  if (decoded.version !== user.tokenVersion) {
+    res.status(401);
+    throw new Error('Refresh token has been revoked');
+  }
+
+  // Issue fresh pair
+  const payload = { id: user._id, role: user.role, version: user.tokenVersion };
+  const accessToken  = signAccessToken(payload);
+  const refreshToken = signRefreshToken(payload);
+
+  setCookies(res, accessToken, refreshToken);
+
+  res.json({ success: true, token: accessToken });
 });
 
 exports.me = asyncHandler(async (req, res) => {
@@ -112,25 +147,28 @@ exports.me = asyncHandler(async (req, res) => {
   res.json({ success: true, user });
 });
 
-exports.logout = (req, res) => {
-  res.clearCookie('token');
+exports.logout = asyncHandler(async (req, res) => {
+  if (req.user) {
+    // Revoke all refresh tokens for this user
+    await User.findByIdAndUpdate(req.user._id, { $inc: { tokenVersion: 1 } });
+  }
+  clearCookies(res);
   res.json({ success: true, message: 'Logged out successfully' });
-};
+});
 
 exports.updatePassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword) {
-    res.status(400);
-    throw new Error('currentPassword and newPassword are required');
-  }
-  const user = await User.findById(req.user._id).select('+password');
+
+  const user = await User.findById(req.user._id).select('+password +tokenVersion');
   if (!(await user.comparePassword(currentPassword))) {
     res.status(401);
     throw new Error('Current password is incorrect');
   }
   user.password = newPassword;
+  user.tokenVersion = (user.tokenVersion || 0) + 1; // revoke existing refresh tokens
   await user.save();
-  sendAuth(user, 200, res);
+
+  await sendAuth(user, 200, res);
 });
 
 exports.listUsers = asyncHandler(async (req, res) => {
@@ -183,7 +221,7 @@ exports.deactivateUser = asyncHandler(async (req, res) => {
   }
   const user = await User.findByIdAndUpdate(
     req.params.id,
-    { status: 'inactive' },
+    { status: 'inactive', $inc: { tokenVersion: 1 } },
     { new: true }
   );
   if (!user) { res.status(404); throw new Error('User not found'); }
@@ -197,14 +235,10 @@ exports.bootstrapAdmin = asyncHandler(async (req, res) => {
     throw new Error('An admin already exists — bootstrap is disabled');
   }
   const { firstName, lastName, email, password } = req.body;
-  if (!firstName || !lastName || !email || !password) {
-    res.status(400);
-    throw new Error('firstName, lastName, email, password are required');
-  }
   const user = await User.create({
     firstName, lastName, email, password,
     role: 'admin',
     status: 'active',
   });
-  sendAuth(user, 201, res);
+  await sendAuth(user, 201, res);
 });

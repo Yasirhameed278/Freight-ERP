@@ -236,6 +236,13 @@ const shipmentSchema = new mongoose.Schema(
     trackingUrl: String,
     lastTrackingUpdate: Date,
     trackingProvider: String,
+    vesselPosition: {
+      lat:       Number,
+      lng:       Number,
+      heading:   Number,
+      speed:     Number,
+      updatedAt: Date,
+    },
 
     operationsManager: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     salesRep:          { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
@@ -268,6 +275,9 @@ const shipmentSchema = new mongoose.Schema(
 );
 
 shipmentSchema.index({ status: 1, createdAt: -1 });
+shipmentSchema.index({ customer: 1, status: 1, createdAt: -1 });
+shipmentSchema.index({ salesRep: 1, status: 1 });
+shipmentSchema.index({ eta: 1, status: 1 });
 shipmentSchema.index({ shipmentNumber: 'text', mblNumber: 'text', hblNumber: 'text', awbNumber: 'text' });
 
 shipmentSchema.virtual('isOverdue').get(function () {

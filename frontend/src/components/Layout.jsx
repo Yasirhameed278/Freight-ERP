@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import ThemeToggle from './ThemeToggle';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 
 const PAGE_META = {
   '/dashboard':     { title: 'Operations Dashboard',    icon: 'bi-speedometer2',    crumbs: [] },
@@ -20,6 +21,8 @@ const PAGE_META = {
   '/clients':       { title: 'Clients',                  icon: 'bi-building',         crumbs: ['CRM', 'Clients'] },
   '/rates':         { title: 'Rate Search',              icon: 'bi-tags',             crumbs: ['Rates'] },
   '/users':         { title: 'User Management',          icon: 'bi-people',           crumbs: ['Admin', 'Users'] },
+  '/tasks':         { title: 'Tasks',                    icon: 'bi-check2-square',    crumbs: ['Workflow', 'Tasks'] },
+  '/workflows':     { title: 'Workflow Rules',           icon: 'bi-diagram-3',        crumbs: ['Workflow', 'Rules'] },
 };
 
 const ROLE_COLOR = {
@@ -129,9 +132,32 @@ const UserMenu = ({ user, onClose }) => {
   );
 };
 
+/* ── Notification helpers ──────────────────────────────────── */
+const TYPE_META = {
+  shipment_milestone: { icon: 'bi-truck',                     color: '#8b5cf6' },
+  invoice_overdue:    { icon: 'bi-exclamation-circle-fill',   color: '#d97706' },
+  invoice_sent:       { icon: 'bi-envelope-check-fill',       color: '#2563eb' },
+  payment_received:   { icon: 'bi-wallet2',                   color: '#0891b2' },
+  deal_stage:         { icon: 'bi-kanban-fill',               color: '#1a56db' },
+  demurrage_warning:  { icon: 'bi-exclamation-triangle-fill', color: '#dc2626' },
+  ar_alert:           { icon: 'bi-clock-history',             color: '#d97706' },
+  portal_quote:       { icon: 'bi-person-lines-fill',         color: '#0891b2' },
+};
+
+const timeAgo = (date) => {
+  const s = Math.floor((Date.now() - new Date(date)) / 1000);
+  if (s < 60)     return 'just now';
+  if (s < 3600)   return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400)  return `${Math.floor(s / 3600)}h ago`;
+  if (s < 172800) return 'Yesterday';
+  return new Date(date).toLocaleDateString();
+};
+
 /* ── Notification Panel ────────────────────────────────────── */
 const NotifPanel = ({ onClose }) => {
+  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
   const ref = useRef(null);
+
   useEffect(() => {
     const handler = (e) => {
       if (ref.current && !ref.current.contains(e.target)) onClose();
@@ -140,39 +166,48 @@ const NotifPanel = ({ onClose }) => {
     return () => document.removeEventListener('mousedown', handler);
   }, [onClose]);
 
-  const notifs = [
-    { id: 1, icon: 'bi-check-circle-fill',       color: '#16a34a', title: 'Shipment KHI-2024-001 approved',          time: '2m ago',    unread: true },
-    { id: 2, icon: 'bi-exclamation-circle-fill', color: '#d97706', title: 'Invoice INV-0042 overdue by 5 days',      time: '1h ago',    unread: true },
-    { id: 3, icon: 'bi-person-plus-fill',        color: '#1a56db', title: 'New client Al-Noor Trading registered',   time: '3h ago',    unread: true },
-    { id: 4, icon: 'bi-truck',                   color: '#8b5cf6', title: 'Milestone updated: Cargo Received',       time: '5h ago',    unread: false },
-    { id: 5, icon: 'bi-wallet2',                 color: '#0891b2', title: 'Payment of PKR 3,450,000 recorded',       time: 'Yesterday', unread: false },
-  ];
-
   return (
     <div ref={ref} className="notif-panel">
       <div className="notif-panel-header">
         <div>
           <span className="notif-panel-title">Notifications</span>
-          <span className="notif-panel-badge">3 new</span>
+          {unreadCount > 0 && <span className="notif-panel-badge">{unreadCount} new</span>}
         </div>
-        <button className="notif-mark-all" onClick={onClose}>Mark all read</button>
+        {unreadCount > 0 && (
+          <button className="notif-mark-all" onClick={markAllRead}>Mark all read</button>
+        )}
       </div>
+
       <div className="notif-list">
-        {notifs.map((n) => (
-          <div key={n.id} className={`notif-item${n.unread ? ' unread' : ''}`} onClick={onClose}>
-            <div className="notif-icon-wrap" style={{ background: `${n.color}15` }}>
-              <i className={`bi ${n.icon}`} style={{ color: n.color, fontSize: 16 }}></i>
-            </div>
-            <div className="notif-body">
-              <div className="notif-text">{n.title}</div>
-              <div className="notif-time">{n.time}</div>
-            </div>
-            {n.unread && <span className="notif-dot"></span>}
+        {notifications.length === 0 ? (
+          <div className="notif-empty">
+            <i className="bi bi-bell-slash" style={{ fontSize: 22, marginBottom: 8, display: 'block', opacity: 0.4 }}></i>
+            No notifications yet
           </div>
-        ))}
+        ) : notifications.map((n) => {
+          const meta = TYPE_META[n.type] || { icon: 'bi-bell', color: '#6b7280' };
+          return (
+            <div
+              key={n._id}
+              className={`notif-item${!n.read ? ' unread' : ''}`}
+              onClick={() => { if (!n.read) markRead(n._id); }}
+            >
+              <div className="notif-icon-wrap" style={{ background: `${meta.color}15` }}>
+                <i className={`bi ${meta.icon}`} style={{ color: meta.color, fontSize: 16 }}></i>
+              </div>
+              <div className="notif-body">
+                <div className="notif-text">{n.title}</div>
+                {n.body && <div className="notif-sub">{n.body}</div>}
+                <div className="notif-time">{timeAgo(n.createdAt)}</div>
+              </div>
+              {!n.read && <span className="notif-dot"></span>}
+            </div>
+          );
+        })}
       </div>
+
       <div className="notif-panel-footer">
-        <button className="notif-view-all" onClick={onClose}>View all notifications</button>
+        <button className="notif-view-all" onClick={onClose}>Close</button>
       </div>
     </div>
   );
@@ -219,6 +254,7 @@ const Layout = () => {
   const [showNotif, setShowNotif]       = useState(false);
   const [showQuick, setShowQuick]       = useState(false);
   const { user } = useAuth();
+  const { unreadCount } = useNotifications();
   const { pathname } = useLocation();
 
   const toggleCollapse = useCallback(() => setCollapsed((c) => !c), []);
@@ -291,7 +327,9 @@ const Layout = () => {
                 title="Notifications"
               >
                 <i className="bi bi-bell"></i>
-                <span className="notif-badge-dot">3</span>
+                {unreadCount > 0 && (
+                  <span className="notif-badge-dot">{unreadCount > 99 ? '99+' : unreadCount}</span>
+                )}
               </button>
               {showNotif && <NotifPanel onClose={() => setShowNotif(false)} />}
             </div>
