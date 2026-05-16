@@ -224,7 +224,7 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-root">
-      {/* ── Greeting Banner ──────────────────────────────────── */}
+      {/* ── PHASE 1: Greeting & Header ──────────────────────────── */}
       <div className="dash-greeting">
         <div className="dash-greeting-left">
           <div className="dash-greeting-emoji">
@@ -250,21 +250,24 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ── Mode KPI Cards ───────────────────────────────────── */}
-      <div className="dash-mode-grid mb-4">
-        {MODES.map((m) => (
-          <ModeCard key={`${m.key}-${m.dir}`} {...m} {...getModeData(m.key, m.dir)} />
-        ))}
-      </div>
-
-      {/* ── Financial KPI Row ────────────────────────────────── */}
+      {/* ── PHASE 2: Main Financial KPI Cards (Prominent) ─────────── */}
       <Row className="g-3 mb-4">
+        <Col xs={6} md={3}>
+          <FinCard
+            label="Total Balance"
+            value={fmtMoney(financials.totalCollected)}
+            icon="bi-wallet2"
+            color="#FF7A45"
+            sub="Account balance"
+            badge="Active"
+          />
+        </Col>
         <Col xs={6} md={3}>
           <FinCard
             label="Outstanding AR"
             value={fmtMoney(financials.outstandingAR)}
-            icon="bi-wallet2"
-            color="#d97706"
+            icon="bi-graph-up"
+            color="#16a34a"
             sub="Receivables pending"
             badge="View →"
             to="/ar-portal"
@@ -272,21 +275,11 @@ const Dashboard = () => {
         </Col>
         <Col xs={6} md={3}>
           <FinCard
-            label="Total Collected"
-            value={fmtMoney(financials.totalCollected)}
-            icon="bi-check-circle"
-            color="#16a34a"
-            sub="Payments received YTD"
-            badge="YTD"
-          />
-        </Col>
-        <Col xs={6} md={3}>
-          <FinCard
-            label="Payables (AP)"
+            label="Total Spending"
             value={fmtMoney(financials.outstandingAP)}
             icon="bi-credit-card"
             color="#ef4444"
-            sub="Vendor outstanding"
+            sub="Payables due"
             badge="View →"
             to="/ap-portal"
           />
@@ -296,13 +289,20 @@ const Dashboard = () => {
             label="Net Position"
             value={fmtMoney(financials.totalCollected - financials.outstandingAP)}
             icon="bi-graph-up-arrow"
-            color="#1a56db"
+            color="#3b82f6"
             sub="Collected minus payables"
           />
         </Col>
       </Row>
 
-      {/* ── Charts + Activity Feed ───────────────────────────── */}
+      {/* ── PHASE 3: Operation Mode KPI Cards ────────────────────── */}
+      <div className="dash-mode-grid mb-4">
+        {MODES.map((m) => (
+          <ModeCard key={`${m.key}-${m.dir}`} {...m} {...getModeData(m.key, m.dir)} />
+        ))}
+      </div>
+
+      {/* ── PHASE 4: Charts + Activity Feed ─────────────────────── */}
       <Row className="g-3 mb-4">
         {/* Operation Type Pie */}
         <Col lg={4}>
@@ -388,7 +388,7 @@ const Dashboard = () => {
                         <Tooltip content={<CustomTooltip isDark={isDark} />} />
                         <Bar dataKey="total" radius={[6, 6, 0, 0]} maxBarSize={32}>
                           {arAging.map((_, i) => (
-                            <Cell key={i} fill={['#16a34a','#3b82f6','#d97706','#dc2626','#7c3aed'][i] || '#6c757d'} />
+                            <Cell key={i} fill={['#16a34a','#3b82f6','#FF7A45','#dc2626','#7c3aed'][i] || '#6c757d'} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -397,7 +397,7 @@ const Dashboard = () => {
                   <div className="dash-legend mt-1">
                     {arAging.map((b, i) => (
                       <div key={b.bucket} className="dash-legend-row">
-                        <span className="dash-legend-dot" style={{ background: ['#16a34a','#3b82f6','#d97706','#dc2626','#7c3aed'][i] || '#6c757d' }}></span>
+                        <span className="dash-legend-dot" style={{ background: ['#16a34a','#3b82f6','#FF7A45','#dc2626','#7c3aed'][i] || '#6c757d' }}></span>
                         <span className="dash-legend-name">{b.bucket} <span style={{ opacity: 0.5 }}>({b.count})</span></span>
                         <strong className="dash-legend-val text-money">{fmtMoney(b.total, false)}</strong>
                       </div>
@@ -441,7 +441,7 @@ const Dashboard = () => {
         </Col>
       </Row>
 
-      {/* ── Top Customers horizontal bar ────────────────────── */}
+      {/* ── PHASE 5: Top Customers horizontal bar ────────────────── */}
       {topCustomers.length > 0 && (
         <div className="erp-card mb-4">
           <div className="erp-card-header">
@@ -458,7 +458,7 @@ const Dashboard = () => {
                 <XAxis type="number" tick={{ fill: chartTick, fontSize: 10 }} tickFormatter={(v) => fmtMoney(v)} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="companyName" tick={{ fill: chartTick, fontSize: 11 }} width={140} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip isDark={isDark} />} />
-                <Bar dataKey="revenue" fill="#1a56db" radius={[0, 4, 4, 0]} name="revenue" maxBarSize={14} />
+                <Bar dataKey="revenue" fill="#FF7A45" radius={[0, 4, 4, 0]} name="revenue" maxBarSize={14} />
                 <Bar dataKey="profit"  fill="#16a34a" radius={[0, 4, 4, 0]} name="profit"  maxBarSize={14} />
               </BarChart>
             </ResponsiveContainer>
@@ -466,14 +466,14 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* ── Quick Links ──────────────────────────────────────── */}
+      {/* ── PHASE 6: Quick Links ────────────────────────────────── */}
       <div className="dash-quick-links">
         {[
-          { to: '/shipments/new', icon: 'bi-plus-circle-fill', label: 'New Job',        color: '#1a56db', sub: 'Create shipment' },
+          { to: '/shipments/new', icon: 'bi-plus-circle-fill', label: 'New Job',        color: '#FF7A45', sub: 'Create shipment' },
           { to: '/sales-summary', icon: 'bi-bar-chart-line',   label: 'Sales Summary',  color: '#7c3aed', sub: 'Management view' },
-          { to: '/ar-portal',     icon: 'bi-wallet2',           label: 'AR Portal',      color: '#d97706', sub: 'Receivables' },
+          { to: '/ar-portal',     icon: 'bi-wallet2',           label: 'AR Portal',      color: '#16a34a', sub: 'Receivables' },
           { to: '/collections',   icon: 'bi-alarm',             label: 'Collections',    color: '#ef4444', sub: 'AR escalation' },
-          { to: '/rates',         icon: 'bi-tags',              label: 'Rate Search',    color: '#0891b2', sub: 'Find best lanes' },
+          { to: '/rates',         icon: 'bi-tags',              label: 'Rate Search',    color: '#3b82f6', sub: 'Find best lanes' },
           { to: '/gl',            icon: 'bi-journal-text',      label: 'General Ledger', color: '#6c757d', sub: 'Accounting' },
         ].map(({ to, icon, label, color, sub }) => (
           <Link key={to} to={to} className="dash-quick-card text-decoration-none">
