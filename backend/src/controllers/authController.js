@@ -118,6 +118,8 @@ exports.refresh = asyncHandler(async (req, res) => {
   try {
     decoded = verifyRefreshToken(token);
   } catch {
+    // Clear the bad cookie so the browser stops sending it
+    clearCookies(res);
     res.status(401);
     throw new Error('Invalid or expired refresh token');
   }

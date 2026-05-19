@@ -29,10 +29,17 @@ api.interceptors.response.use(
     const original = err.config;
 
     const is401 = err.response?.status === 401;
-    const isRefreshRoute = original?.url?.includes('/auth/refresh');
+    // Never attempt a silent refresh for auth mutation routes — the error should
+    // propagate directly to the caller (e.g. login form shows "wrong password").
+    const skipRefresh =
+      original?.url?.includes('/auth/refresh') ||
+      original?.url?.includes('/auth/login') ||
+      original?.url?.includes('/auth/register') ||
+      original?.url?.includes('/auth/logout') ||
+      original?.url?.includes('/auth/bootstrap');
     const alreadyRetried = original?._retry;
 
-    if (!is401 || isRefreshRoute || alreadyRetried) {
+    if (!is401 || skipRefresh || alreadyRetried) {
       if (is401) {
         localStorage.removeItem('freight_token');
         localStorage.removeItem('freight_user');

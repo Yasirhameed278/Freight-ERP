@@ -1,47 +1,45 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import SortableDealCard from './DealCard';
+import SortableShipmentCard from './ShipmentCard';
 
-const fmtCompact = (value) => {
-  if (!value) return '$0';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1,
-  }).format(value);
-};
-
-const KanbanColumn = ({ stage, label, color = 'var(--brand)', deals, totalValue }) => {
+const KanbanColumn = ({ stage, label, color, shipments, onAdd }) => {
   const { setNodeRef, isOver } = useDroppable({ id: stage });
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`kanban-column${isOver ? ' is-over' : ''}`}
-      style={{ borderTop: `3px solid ${color}` }}
-    >
-      <div className="kanban-column-header">
-        <div className="kanban-column-title">
-          <span className={`kanban-stage-dot dot-${stage}`}></span>
-          <span style={{ fontWeight: 700, color }}>{label}</span>
-          <span style={{
-            fontSize: 11, fontWeight: 700, padding: '1px 8px', borderRadius: 99,
-            background: color + '20', color,
-          }}>{deals.length}</span>
-        </div>
-        <div className="kanban-column-stat" style={{ fontWeight: 700, color }}>
-          {fmtCompact(totalValue)}
-        </div>
+    <div className="pip-col">
+      {/* Column header */}
+      <div className="pip-col-header">
+        <div className="pip-col-dot" style={{ background: color }}></div>
+        <span className="pip-col-label">{label}</span>
+        <span className="pip-col-count">{shipments.length}</span>
+        <button
+          className="pip-col-add"
+          type="button"
+          onClick={onAdd}
+          title="New job"
+        >
+          <i className="bi bi-plus" style={{ fontSize: 14 }}></i>
+        </button>
       </div>
 
-      <div className="kanban-cards">
-        <SortableContext items={deals.map((d) => d._id)} strategy={verticalListSortingStrategy}>
-          {deals.map((deal) => (
-            <SortableDealCard key={deal._id} deal={deal} />
+      {/* Cards area */}
+      <div
+        ref={setNodeRef}
+        className={`pip-col-body${isOver ? ' is-over' : ''}`}
+      >
+        <SortableContext
+          items={shipments.map((s) => s._id)}
+          strategy={verticalListSortingStrategy}
+        >
+          {shipments.map((s) => (
+            <SortableShipmentCard key={s._id} shipment={s} />
           ))}
         </SortableContext>
-        {deals.length === 0 && (
-          <div className="kanban-empty">
-            <i className="bi bi-inbox d-block mb-1" style={{ fontSize: 20, opacity: 0.3 }}></i>
-            Drop deals here
+
+        {shipments.length === 0 && (
+          <div className="pip-col-empty">
+            <i className="bi bi-inbox" style={{ fontSize: 22 }}></i>
+            Drop jobs here
           </div>
         )}
       </div>

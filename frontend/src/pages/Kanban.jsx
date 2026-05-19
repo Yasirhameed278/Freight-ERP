@@ -1,57 +1,75 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   DndContext, DragOverlay, PointerSensor, KeyboardSensor,
   useSensor, useSensors, closestCorners,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { Toast, ToastContainer } from 'react-bootstrap';
 
 import KanbanColumn from '../components/kanban/KanbanColumn';
-import { DealCardView } from '../components/kanban/DealCard';
-import NewDealModal from '../components/kanban/NewDealModal';
-import { dealsApi } from '../api';
+import { ShipmentCardView, cardValue } from '../components/kanban/ShipmentCard';
+import { shipmentsApi } from '../api';
 
 const STAGES = [
-  { id: 'inquiry',   label: 'Inquiry',   color: '#6b7280', icon: 'bi-funnel',       dotClass: 'dot-inquiry' },
-  { id: 'quoted',    label: 'Quoted',    color: '#2563eb', icon: 'bi-file-text',    dotClass: 'dot-quoted' },
-  { id: 'confirmed', label: 'Confirmed', color: '#16a34a', icon: 'bi-check-circle', dotClass: 'dot-confirmed' },
-  { id: 'lost',      label: 'Lost',      color: '#dc2626', icon: 'bi-x-circle',     dotClass: 'dot-lost' },
+  { id: 'quote',          label: 'Quote',          color: '#9ca3af' },
+  { id: 'booked',         label: 'Booked',         color: '#3b82f6' },
+  { id: 'cargo_received', label: 'Cargo Received', color: '#3b82f6' },
+  { id: 'customs_export', label: 'Customs Export', color: '#f59e0b' },
+  { id: 'in_transit',     label: 'In Transit',     color: '#10b981' },
+  { id: 'cleared',        label: 'Cleared',        color: '#10b981' },
 ];
+
+const STAGE_IDS = new Set(STAGES.map((s) => s.id));
 
 const fmtCompact = (v) =>
   new Intl.NumberFormat('en-US', {
-    style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1,
+    style: 'currency', currency: 'USD',
+    notation: 'compact', maximumFractionDigits: 0,
   }).format(v || 0);
 
+const FILTERS = [
+  { key: 'all',       label: 'All teams',   fn: () => true },
+  { key: 'sea_exp',   label: 'Sea Export',  fn: (s) => s.mode === 'sea' && s.direction === 'export' },
+  { key: 'sea_imp',   label: 'Sea Import',  fn: (s) => s.mode === 'sea' && s.direction === 'import' },
+  { key: 'air',       label: 'Air',         fn: (s) => s.mode === 'air' },
+  { key: 'road_rail', label: 'Road & Rail', fn: (s) => ['road', 'rail'].includes(s.mode) },
+];
+
+const emptyColumns = () => {
+  const c = {};
+  STAGES.forEach((s) => { c[s.id] = []; });
+  return c;
+};
+
 const Kanban = () => {
-  const [columns, setColumns] = useState({
-    inquiry: [], quoted: [], confirmed: [], lost: [],
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
-  const [activeId, setActiveId]   = useState(null);
-  const [showNewDeal, setShowNewDeal] = useState(false);
-  const [toast, setToast]     = useState(null);
+  const navigate = useNavigate();
+
+  const [columns, setColumns]   = useState(emptyColumns);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
+  const [activeId, setActiveId] = useState(null);
+  const [filter, setFilter]     = useState('all');
+  const [toast, setToast]       = useState(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  /* Load shipments ────────────────────────────────────────────── */
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const { columns: data } = await dealsApi.getKanban();
+        const data = await shipmentsApi.list({ limit: 300 });
         if (cancelled) return;
-        setColumns({
-          inquiry:   data.inquiry?.deals   || [],
-          quoted:    data.quoted?.deals    || [],
-          confirmed: data.confirmed?.deals || [],
-          lost:      data.lost?.deals      || [],
-        });
+        const grouped = emptyColumns();
+        for (const s of (data.items || [])) {
+          if (STAGE_IDS.has(s.status)) grouped[s.status].push(s);
+        }
+        setColumns(grouped);
       } catch (err) {
-        setError(err.response?.data?.message || 'Failed to load deals');
+        if (!cancelled) setError(err.response?.data?.message || 'Failed to load pipeline');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -59,61 +77,59 @@ const Kanban = () => {
     return () => { cancelled = true; };
   }, []);
 
+  /* Filtered view (for display only, DnD still uses raw `columns`) */
+  const filterFn = FILTERS.find((f) => f.key === filter)?.fn || (() => true);
+  const filteredColumns = useMemo(() => {
+    const result = {};
+    STAGES.forEach((s) => { result[s.id] = (columns[s.id] || []).filter(filterFn); });
+    return result;
+  }, [columns, filter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const totalJobs  = useMemo(() => Object.values(filteredColumns).flat().length, [filteredColumns]);
+  const totalValue = useMemo(
+    () => Object.values(filteredColumns).flat().reduce((s, sh) => s + cardValue(sh), 0),
+    [filteredColumns]
+  );
+
+  /* DnD helpers ───────────────────────────────────────────────── */
   const findContainer = (id) => {
-    if (STAGES.some((s) => s.id === id)) return id;
-    for (const stage of Object.keys(columns)) {
-      if (columns[stage].some((d) => d._id === id)) return stage;
+    if (STAGE_IDS.has(id)) return id;
+    for (const stageId of Object.keys(columns)) {
+      if ((columns[stageId] || []).some((s) => s._id === id)) return stageId;
     }
     return null;
   };
 
-  const findDeal = (id) => {
-    for (const stage of Object.keys(columns)) {
-      const d = columns[stage].find((deal) => deal._id === id);
-      if (d) return d;
+  const findShipment = (id) => {
+    for (const stageId of Object.keys(columns)) {
+      const found = (columns[stageId] || []).find((s) => s._id === id);
+      if (found) return found;
     }
     return null;
   };
-
-  const totals = useMemo(() => {
-    const out = {};
-    for (const stage of Object.keys(columns)) {
-      out[stage] = columns[stage].reduce((sum, d) => sum + (d.estimatedValue || 0), 0);
-    }
-    return out;
-  }, [columns]);
-
-  const allDeals     = useMemo(() => Object.values(columns).flat(), [columns]);
-  const totalValue   = useMemo(() => allDeals.reduce((s, d) => s + (d.estimatedValue || 0), 0), [allDeals]);
-  const confirmedVal = useMemo(() => (columns.confirmed || []).reduce((s, d) => s + (d.estimatedValue || 0), 0), [columns]);
-  const winRate      = useMemo(() => {
-    const closed = (columns.confirmed?.length || 0) + (columns.lost?.length || 0);
-    return closed > 0 ? Math.round((columns.confirmed?.length / closed) * 100) : 0;
-  }, [columns]);
 
   const handleDragStart  = (e) => setActiveId(e.active.id);
   const handleDragCancel = () => setActiveId(null);
 
   const handleDragOver = ({ active, over }) => {
     if (!over) return;
-    const fromStage = findContainer(active.id);
-    const toStage   = findContainer(over.id);
-    if (!fromStage || !toStage || fromStage === toStage) return;
+    const from = findContainer(active.id);
+    const to   = findContainer(over.id);
+    if (!from || !to || from === to) return;
+
     setColumns((prev) => {
-      const fromItems = prev[fromStage];
-      const toItems   = prev[toStage];
-      const moving    = fromItems.find((d) => d._id === active.id);
+      const fromItems = prev[from] || [];
+      const toItems   = prev[to]   || [];
+      const moving = fromItems.find((s) => s._id === active.id);
       if (!moving) return prev;
-      const overIndex = over.id === toStage
-        ? toItems.length
-        : toItems.findIndex((d) => d._id === over.id);
+      const overIdx = over.id === to ? toItems.length : toItems.findIndex((s) => s._id === over.id);
       return {
         ...prev,
-        [fromStage]: fromItems.filter((d) => d._id !== active.id),
-        [toStage]: [
-          ...toItems.slice(0, overIndex),
-          { ...moving, stage: toStage },
-          ...toItems.slice(overIndex),
+        [from]: fromItems.filter((s) => s._id !== active.id),
+        [to]: [
+          ...toItems.slice(0, overIdx),
+          { ...moving, status: to },
+          ...toItems.slice(overIdx),
         ],
       };
     });
@@ -122,106 +138,111 @@ const Kanban = () => {
   const handleDragEnd = async ({ active, over }) => {
     setActiveId(null);
     if (!over) return;
-    const fromStage = findContainer(active.id);
-    const toStage   = findContainer(over.id);
-    if (!fromStage || !toStage) return;
-    const snapshot = JSON.parse(JSON.stringify(columns));
+    const from = findContainer(active.id);
+    const to   = findContainer(over.id);
+    if (!from || !to || from === to) return; // same column — no status change needed
 
-    if (fromStage === toStage) {
-      if (active.id === over.id) return;
-      const items    = [...columns[fromStage]];
-      const oldIndex = items.findIndex((d) => d._id === active.id);
-      const newIndex = items.findIndex((d) => d._id === over.id);
-      if (oldIndex === -1 || newIndex === -1) return;
-      const [moved] = items.splice(oldIndex, 1);
-      items.splice(newIndex, 0, moved);
-      setColumns({ ...columns, [fromStage]: items });
-      try { await dealsApi.reorder(items.map((d, i) => ({ id: d._id, position: i }))); }
-      catch { setColumns(snapshot); setToast({ variant: 'danger', message: 'Failed to reorder — changes reverted' }); }
-    } else {
-      const newPosition = columns[toStage].findIndex((d) => d._id === active.id);
-      try {
-        await dealsApi.move(active.id, { stage: toStage, position: newPosition });
-        await dealsApi.reorder(columns[toStage].map((d, i) => ({ id: d._id, position: i })));
-        setToast({ variant: 'success', message: `Moved to ${toStage}` });
-      } catch (err) {
-        setColumns(snapshot);
-        setToast({ variant: 'danger', message: err.response?.data?.message || 'Failed to move — changes reverted' });
-      }
+    try {
+      await shipmentsApi.update(active.id, { status: to });
+      showToast(true, `Moved to ${to.replace(/_/g, ' ')}`);
+    } catch {
+      // Revert optimistic update
+      setColumns((prev) => {
+        const shipment = (prev[to] || []).find((s) => s._id === active.id);
+        if (!shipment) return prev;
+        return {
+          ...prev,
+          [to]:   prev[to].filter((s) => s._id !== active.id),
+          [from]: [...(prev[from] || []), { ...shipment, status: from }],
+        };
+      });
+      showToast(false, 'Failed to update status — reverted');
     }
   };
 
-  const handleDealCreated = (deal) => {
-    setColumns((prev) => ({
-      ...prev,
-      [deal.stage]: [...(prev[deal.stage] || []), deal],
-    }));
-    setToast({ variant: 'success', message: `Created ${deal.dealCode}` });
+  /* Toast ─────────────────────────────────────────────────────── */
+  const showToast = (ok, msg) => {
+    setToast({ ok, msg });
+    setTimeout(() => setToast(null), 3000);
   };
 
-  const activeDeal = activeId ? findDeal(activeId) : null;
+  const activeShipment = activeId ? findShipment(activeId) : null;
 
+  /* ── Render ─────────────────────────────────────────────────── */
   return (
-    <>
-      <div className="kanban-shell">
-        {/* ── Page header ───────────────────────────────────── */}
-        <div className="ss-page-header">
-          <div className="ss-page-header-left">
-            <div className="ss-page-header-icon"><i className="bi bi-kanban"></i></div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <h4 className="ss-page-title" style={{ margin: 0 }}>Sales Pipeline</h4>
-              <span className="ss-info-tip" data-tip="Drag cards to advance deal stages · click to open deal details">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.25"/>
-                  <circle cx="8" cy="5.2" r="0.85" fill="currentColor"/>
-                  <path d="M8 7.5v3.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                </svg>
-              </span>
-            </div>
+    <div className="pip-shell">
+
+      {/* Header */}
+      <div className="pip-header">
+        <div className="pip-header-row">
+          <div>
+            <h1 className="pip-title">Pipeline</h1>
+            <p className="pip-subtitle">Drag shipments through your operations workflow</p>
           </div>
-          <div className="ss-header-actions">
-            <button className="ss-action-btn ss-action-btn-primary" onClick={() => setShowNewDeal(true)}>
-              <i className="bi bi-plus-lg me-2"></i>New Deal
+          <div className="pip-header-actions">
+            <button className="sd-btn" type="button">
+              <i className="bi bi-funnel"></i> Filter
+            </button>
+            <button
+              className="sd-btn sd-btn-primary"
+              type="button"
+              onClick={() => navigate('/shipments/new')}
+            >
+              <i className="bi bi-plus"></i> New Job
             </button>
           </div>
         </div>
+      </div>
 
-        {/* ── Pipeline summary strip ────────────────────────── */}
-        <div className="kanban-pipeline-strip">
-          <div className="kanban-pipeline-tile" style={{ borderTopColor: '#2563eb' }}>
-            <div className="kanban-pipeline-label">Total Pipeline</div>
-            <div className="kanban-pipeline-count" style={{ color: '#2563eb' }}>{allDeals.length}</div>
-            <div className="kanban-pipeline-value">{fmtCompact(totalValue)} total value</div>
-          </div>
-          {STAGES.map((s) => (
-            <div key={s.id} className="kanban-pipeline-tile" style={{ borderTopColor: s.color }}>
-              <div className="kanban-pipeline-label">{s.label}</div>
-              <div className="kanban-pipeline-count" style={{ color: s.color }}>
-                {columns[s.id]?.length || 0}
-              </div>
-              <div className="kanban-pipeline-value">{fmtCompact(totals[s.id])}</div>
-            </div>
+      {/* Filter chips + stats */}
+      <div className="pip-filter-row">
+        <div className="pip-chips">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              className={`pip-chip${filter === f.key ? ' active' : ''}`}
+              onClick={() => setFilter(f.key)}
+            >
+              {f.label}
+            </button>
           ))}
-          <div className="kanban-pipeline-tile" style={{ borderTopColor: '#16a34a' }}>
-            <div className="kanban-pipeline-label">Win Rate</div>
-            <div className="kanban-pipeline-count" style={{ color: winRate >= 50 ? '#16a34a' : '#d97706' }}>
-              {winRate}%
-            </div>
-            <div className="kanban-pipeline-value">{fmtCompact(confirmedVal)} confirmed</div>
-          </div>
         </div>
-
-        {error && <div className="alert alert-danger mb-3">{error}</div>}
-
-        {loading ? (
-          <div className="ss-loading" style={{ minHeight: 300 }}>
-            <div className="dashboard-loader">
-              <div className="dashboard-loader-ring"></div>
-              <i className="bi bi-kanban dashboard-loader-icon"></i>
-            </div>
-            <span>Loading pipeline…</span>
+        {!loading && (
+          <div className="pip-stats">
+            Showing {totalJobs} jobs · Total value{' '}
+            <strong style={{ color: 'var(--brand)' }}>{fmtCompact(totalValue)}</strong>
           </div>
-        ) : (
+        )}
+      </div>
+
+      {error && (
+        <div style={{
+          margin: '0 28px 12px',
+          padding: '10px 14px',
+          background: '#fef2f2', color: '#991b1b',
+          borderRadius: 8, fontSize: 13,
+          border: '1px solid #fecaca',
+        }}>
+          {error}
+        </div>
+      )}
+
+      {/* Board */}
+      {loading ? (
+        <div style={{
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          flex: 1, gap: 16, minHeight: 320,
+        }}>
+          <div className="dashboard-loader">
+            <div className="dashboard-loader-ring"></div>
+            <i className="bi bi-kanban dashboard-loader-icon"></i>
+          </div>
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>Loading pipeline…</span>
+        </div>
+      ) : (
+        <div className="pip-board-wrap">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCorners}
@@ -230,39 +251,43 @@ const Kanban = () => {
             onDragEnd={handleDragEnd}
             onDragCancel={handleDragCancel}
           >
-            <div className="kanban-board">
+            <div className="pip-board">
               {STAGES.map((s) => (
                 <KanbanColumn
                   key={s.id}
                   stage={s.id}
                   label={s.label}
                   color={s.color}
-                  deals={columns[s.id] || []}
-                  totalValue={totals[s.id]}
+                  shipments={filteredColumns[s.id] || []}
+                  onAdd={() => navigate('/shipments/new')}
                 />
               ))}
             </div>
+
             <DragOverlay>
-              {activeDeal ? <DealCardView deal={activeDeal} isOverlay /> : null}
+              {activeShipment ? <ShipmentCardView shipment={activeShipment} isOverlay /> : null}
             </DragOverlay>
           </DndContext>
-        )}
-      </div>
+        </div>
+      )}
 
-      <NewDealModal
-        show={showNewDeal}
-        onHide={() => setShowNewDeal(false)}
-        onCreated={handleDealCreated}
-      />
-
-      <ToastContainer position="bottom-end" className="p-3" style={{ zIndex: 1080 }}>
-        <Toast onClose={() => setToast(null)} show={!!toast} delay={3000} autohide bg={toast?.variant}>
-          <Toast.Body className={toast?.variant === 'danger' ? 'text-white' : ''}>
-            {toast?.message}
-          </Toast.Body>
-        </Toast>
-      </ToastContainer>
-    </>
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 1100,
+          padding: '10px 16px', borderRadius: 10,
+          background: toast.ok ? '#f0fdf4' : '#fef2f2',
+          color: toast.ok ? '#166534' : '#991b1b',
+          border: `1px solid ${toast.ok ? '#bbf7d0' : '#fecaca'}`,
+          fontSize: 13, fontWeight: 500,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <i className={`bi ${toast.ok ? 'bi-check-circle' : 'bi-exclamation-circle'}`}></i>
+          {toast.msg}
+        </div>
+      )}
+    </div>
   );
 };
 

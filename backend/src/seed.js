@@ -18,6 +18,7 @@ const Invoice  = require('./models/Invoice');
 const Deal     = require('./models/Deal');
 const Rate     = require('./models/Rate');
 const Counter  = require('./models/Counter');
+const Task     = require('./models/Task');
 
 /* ── helpers ─────────────────────────────────────────────────── */
 const daysAgo   = (n) => new Date(Date.now() - n * 864e5);
@@ -39,6 +40,7 @@ async function seed() {
     Deal.deleteMany({}),
     Rate.deleteMany({}),
     Counter.deleteMany({}),
+    Task.deleteMany({}),
   ]);
   console.log('✅  Collections cleared');
 
@@ -693,6 +695,193 @@ async function seed() {
   const deals = await Deal.insertMany(dealsData);
   console.log(`✅  ${deals.length} deals created`);
 
+  /* ── 7. TASKS ────────────────────────────────────────────── */
+  const [shp1, shp2, shp3, shp4, shp5, shp6, shp7] = shipments;
+  const [deal1, deal2, deal3, deal4, deal5] = deals;
+
+  const tasksData = [
+    // ── TO DO (open) ─────────────────────────────────────────
+    {
+      title: 'Prepare customs declaration for SEA-2025-0004',
+      description: 'Draft import customs declaration for 2×20GP CNC machinery from Hamburg. Verify HS codes and confirm duty rates with customs broker.',
+      status: 'open', priority: 'urgent',
+      assignedTo: ops._id, createdBy: manager._id,
+      dueAt: daysAhead(2),
+      linkedTo: { kind: 'Shipment', id: shp4._id, label: 'SEA-2025-0004' },
+      tags: ['customs', 'import'],
+    },
+    {
+      title: 'Send booking confirmation to Pacific Exports',
+      description: 'Forward CMA CGM booking confirmation and pre-alert to Pacific Exports Pte Ltd. Include CFS cutoff reminder.',
+      status: 'open', priority: 'high',
+      assignedTo: cs._id, createdBy: ops._id,
+      dueAt: daysAhead(1),
+      linkedTo: { kind: 'Shipment', id: shp3._id, label: 'SEA-2025-0003' },
+      tags: ['booking', 'sea'],
+    },
+    {
+      title: 'Chase overdue payment — Silk Road Trading',
+      description: 'INV-2025-0003 is 45 days overdue. Send final demand letter and escalate to manager if no response within 48 hours.',
+      status: 'open', priority: 'urgent',
+      assignedTo: finance._id, createdBy: manager._id,
+      dueAt: new Date(),
+      linkedTo: { kind: 'Client', id: silkRoad._id, label: 'Silk Road Trading Co' },
+      tags: ['collections', 'overdue'],
+    },
+    {
+      title: 'Obtain cargo insurance certificate for AIR-2025-0002',
+      description: 'Customer requested all-risk cargo insurance for textile samples. Issue certificate before customs release.',
+      status: 'open', priority: 'normal',
+      assignedTo: cs._id, createdBy: ops._id,
+      dueAt: daysAhead(1),
+      linkedTo: { kind: 'Shipment', id: shp7._id, label: 'AIR-2025-0002' },
+      tags: ['insurance', 'air'],
+    },
+    {
+      title: 'Request rate update from Maersk for Q3',
+      description: 'Current rate sheet SEA-DXB-HAM-01 expires in 120 days. Request renewed contract rates for Q3 to allow advance pricing.',
+      status: 'open', priority: 'normal',
+      assignedTo: sales._id, createdBy: manager._id,
+      dueAt: daysAhead(14),
+      linkedTo: { kind: 'Deal', id: deal1._id, label: 'ACME Motors — Monthly FCL China–Dubai' },
+      tags: ['rates', 'sea'],
+    },
+    {
+      title: 'Schedule site visit for EuroLine pharma lane review',
+      description: 'EuroLine procurement team wants a facility tour and SOP walk-through before signing the air freight contract.',
+      status: 'open', priority: 'high',
+      assignedTo: sales._id, createdBy: sales._id,
+      dueAt: daysAhead(7),
+      linkedTo: { kind: 'Deal', id: deal2._id, label: 'EuroLine GmbH — Air Cargo Pharma Lane' },
+      tags: ['sales', 'air'],
+    },
+
+    // ── IN PROGRESS (in_progress) ─────────────────────────────
+    {
+      title: 'Track SEA-2025-0001 ETA update from Maersk',
+      description: 'Vessel MSC GÜLSÜN voyage 511W — confirm arrival window at Hamburg. Update customer and co-loader 48 hrs ahead.',
+      status: 'in_progress', priority: 'high',
+      assignedTo: ops._id, createdBy: ops._id,
+      dueAt: daysAhead(3),
+      linkedTo: { kind: 'Shipment', id: shp1._id, label: 'SEA-2025-0001' },
+      tags: ['tracking', 'sea'],
+    },
+    {
+      title: 'Coordinate last-mile delivery for AIR-2025-0001',
+      description: 'Pharma cargo cleared at LHR customs. Arrange temperature-controlled van from Heathrow to Triton\'s London depot.',
+      status: 'in_progress', priority: 'urgent',
+      assignedTo: cs._id, createdBy: ops._id,
+      dueAt: daysAhead(1),
+      linkedTo: { kind: 'Shipment', id: shp3._id, label: 'AIR-2025-0001' },
+      tags: ['delivery', 'air', 'pharma'],
+    },
+    {
+      title: 'Process import customs clearance — AIR-2025-0002',
+      description: 'Submit customs entry for 180 kg textile samples. Coordinate with broker for HS classification and duty payment.',
+      status: 'in_progress', priority: 'high',
+      assignedTo: ops._id, createdBy: manager._id,
+      dueAt: new Date(),
+      linkedTo: { kind: 'Shipment', id: shp7._id, label: 'AIR-2025-0002' },
+      tags: ['customs', 'import', 'air'],
+    },
+    {
+      title: 'Prepare quote for Silk Road annual road contract',
+      description: 'Build costing model for 12-month road freight contract DXB→RUH. Include fuel escalation clause and detention terms.',
+      status: 'in_progress', priority: 'normal',
+      assignedTo: sales._id, createdBy: manager._id,
+      dueAt: daysAhead(5),
+      linkedTo: { kind: 'Deal', id: deal3._id, label: 'Silk Road Trading — Annual Road Contract' },
+      tags: ['quoting', 'road'],
+    },
+    {
+      title: 'Finalize Triton Global agency commission structure',
+      description: 'Legal reviewed standard NVO agreement. Align on commission % for cross-trade lanes and revenue sharing cap.',
+      status: 'in_progress', priority: 'high',
+      assignedTo: manager._id, createdBy: admin._id,
+      dueAt: daysAhead(10),
+      linkedTo: { kind: 'Deal', id: deal5._id, label: 'Global Trade DMCC — Multimodal UK Project' },
+      tags: ['legal', 'partnership'],
+    },
+
+    // ── REVIEW (review) ───────────────────────────────────────
+    {
+      title: 'Review & approve B/L draft for SEA-2025-0001',
+      description: 'Maersk issued draft B/L. Verify consignee details, notify of loading, marks & numbers vs packing list. Confirm with Apex before release.',
+      status: 'review', priority: 'high',
+      assignedTo: manager._id, createdBy: ops._id,
+      dueAt: daysAhead(2),
+      linkedTo: { kind: 'Shipment', id: shp1._id, label: 'SEA-2025-0001' },
+      tags: ['documents', 'sea'],
+    },
+    {
+      title: 'Review spot quote — SEA-2025-0004 machinery import',
+      description: 'Hapag-Lloyd spot rate higher than contract benchmark. Review P&L before approving quote to Global Trade DMCC.',
+      status: 'review', priority: 'urgent',
+      assignedTo: manager._id, createdBy: sales._id,
+      dueAt: daysAhead(1),
+      linkedTo: { kind: 'Shipment', id: shp4._id, label: 'SEA-2025-0004' },
+      tags: ['pricing', 'approval'],
+    },
+    {
+      title: 'Audit INV-2025-0004 partial payment allocation',
+      description: 'Premier paid USD 1,800 against INV-2025-0004 (total USD 3,591). Confirm allocation across freight vs. surcharge lines in ledger.',
+      status: 'review', priority: 'normal',
+      assignedTo: finance._id, createdBy: finance._id,
+      dueAt: daysAhead(4),
+      linkedTo: { kind: 'Invoice', id: invoices[3]._id, label: 'INV-2025-0004' },
+      tags: ['finance', 'reconciliation'],
+    },
+
+    // ── DONE (done) ───────────────────────────────────────────
+    {
+      title: 'Confirm CMA CGM booking for SEA-2025-0003',
+      description: 'LCL consolidation booking BKG-25012011 confirmed with CMA CGM. HBL FPAE25012003 issued.',
+      status: 'done', priority: 'normal',
+      assignedTo: ops._id, createdBy: ops._id,
+      dueAt: daysAgo(3), completedAt: daysAgo(3),
+      linkedTo: { kind: 'Shipment', id: shp3._id, label: 'SEA-2025-0003' },
+      tags: ['booking', 'sea'],
+    },
+    {
+      title: 'Export customs cleared — AIR-2025-0001',
+      description: 'DXB export customs declaration approved. EK9701 departed on schedule. Sent pre-alert to Triton London.',
+      status: 'done', priority: 'high',
+      assignedTo: ops._id, createdBy: ops._id,
+      dueAt: daysAgo(5), completedAt: daysAgo(5),
+      linkedTo: { kind: 'Shipment', id: shp3._id, label: 'AIR-2025-0001' },
+      tags: ['customs', 'export', 'air'],
+    },
+    {
+      title: 'Send INV-2025-0002 to Apex Manufacturing',
+      description: 'Invoice for SEA-2025-0001 ocean freight and handling charges sent via email and uploaded to customer portal.',
+      status: 'done', priority: 'normal',
+      assignedTo: finance._id, createdBy: finance._id,
+      dueAt: daysAgo(10), completedAt: daysAgo(10),
+      linkedTo: { kind: 'Invoice', id: invoices[1]._id, label: 'INV-2025-0002' },
+      tags: ['invoicing', 'AR'],
+    },
+    {
+      title: 'KYC verification — Premier Retail Group',
+      description: 'Collected trade license, passport copies, and MOA. All documents verified and filed. Status updated to verified.',
+      status: 'done', priority: 'low',
+      assignedTo: cs._id, createdBy: admin._id,
+      dueAt: daysAgo(20), completedAt: daysAgo(18),
+      linkedTo: { kind: 'Client', id: premier._id, label: 'Premier Retail Group LLC' },
+      tags: ['compliance', 'KYC'],
+    },
+    {
+      title: 'Update FastTruck detention rates in rate card',
+      description: 'FastTruck notified of new detention rate effective last month. Rate card updated in system and communicated to ops team.',
+      status: 'done', priority: 'low',
+      assignedTo: ops._id, createdBy: manager._id,
+      dueAt: daysAgo(7), completedAt: daysAgo(7),
+      tags: ['rates', 'road'],
+    },
+  ];
+
+  const tasks = await Task.insertMany(tasksData);
+  console.log(`✅  ${tasks.length} tasks created`);
+
   /* ── done ─────────────────────────────────────────────────── */
   console.log('\n🎉  Seed complete!\n');
   console.log('━'.repeat(48));
@@ -706,11 +895,12 @@ async function seed() {
   console.log('  CS         : cs@freightpro.ae        / Demo@1234');
   console.log('━'.repeat(48));
   console.log('\n  SUMMARY');
-  console.log(`  • ${clients.length} clients  (shippers, consignees, agents, vendors)`);
-  console.log(`  • ${shipments.length} shipments (sea FCL/LCL, air, road — all stages)`);
-  console.log(`  • ${invoices.length} invoices  (paid, overdue, partial, draft, AP)`);
-  console.log(`  • ${deals.length} deals     (all pipeline stages)`);
-  console.log(`  • ${rates.length} rates     (sea, air, road lanes)`);
+  console.log(`  • ${clients.length} clients   (shippers, consignees, agents, vendors)`);
+  console.log(`  • ${shipments.length} shipments  (sea FCL/LCL, air, road — all stages)`);
+  console.log(`  • ${invoices.length} invoices   (paid, overdue, partial, draft, AP)`);
+  console.log(`  • ${deals.length} deals      (all pipeline stages)`);
+  console.log(`  • ${rates.length} rates      (sea, air, road lanes)`);
+  console.log(`  • ${tasks.length} tasks      (open, in_progress, review, done — linked to jobs)`);
   console.log('');
 
   await mongoose.disconnect();

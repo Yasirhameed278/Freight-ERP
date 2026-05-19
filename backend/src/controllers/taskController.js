@@ -3,8 +3,8 @@ const Task = require('../models/Task');
 
 /* ─── helpers ─────────────────────────────────────────────── */
 const populate = [
-  { path: 'assignedTo', select: 'name email role' },
-  { path: 'createdBy',  select: 'name email' },
+  { path: 'assignedTo', select: 'firstName lastName email role' },
+  { path: 'createdBy',  select: 'firstName lastName email' },
 ];
 
 /* ─── list ────────────────────────────────────────────────── */

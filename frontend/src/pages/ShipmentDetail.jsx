@@ -1,16 +1,16 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { Row, Col, Button, Modal, Form, Alert } from 'react-bootstrap';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Modal, Form, Alert } from 'react-bootstrap';
 import { shipmentsApi, documentsApi, tasksApi, usersApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import VesselMap from '../components/tracking/VesselMap';
 
-/* ── helpers ──────────────────────────────────────────────── */
+/* ── Helpers ─────────────────────────────────────────────────── */
 const fmt = (d) =>
   d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 
 const fmtMoney = (n, cur = 'USD') =>
-  n != null ? `${cur} ${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+  n != null ? `${cur} ${Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—';
 
 const STATUS_CONFIG = {
   quote:            { color: '#6b7280', bg: '#f3f4f6', label: 'Quote' },
@@ -31,10 +31,19 @@ const STATUS_CONFIG = {
   on_hold:          { color: '#d97706', bg: '#fffbeb', label: 'On Hold' },
 };
 
-const APPROVAL_CONFIG = {
-  pending:  { color: '#d97706', bg: '#fffbeb', icon: 'bi-clock',            label: 'Pending Approval' },
-  approved: { color: '#16a34a', bg: '#dcfce7', icon: 'bi-check-circle-fill', label: 'Approved' },
-  rejected: { color: '#dc2626', bg: '#fef2f2', icon: 'bi-x-circle-fill',    label: 'Rejected' },
+const STATUS_ORDER = [
+  'quote','booked','pickup_scheduled','cargo_received','customs_export',
+  'loaded','in_transit','transhipment','arrived','customs_import',
+  'cleared','out_for_delivery','delivered','completed',
+];
+
+const MODE_CONFIG = {
+  sea:        { icon: 'bi-water',       color: '#1a56db', label: 'SEA' },
+  air:        { icon: 'bi-airplane',    color: '#dc2626', label: 'AIR' },
+  road:       { icon: 'bi-truck',       color: '#059669', label: 'ROAD' },
+  rail:       { icon: 'bi-train-front', color: '#7c3aed', label: 'RAIL' },
+  multimodal: { icon: 'bi-diagram-3',   color: '#d97706', label: 'MULTI' },
+  courier:    { icon: 'bi-box',         color: '#0891b2', label: 'CUR' },
 };
 
 const MS_COLOR = {
@@ -51,16 +60,17 @@ const MS_ICON = {
   skipped:     'bi-dash-circle',
   pending:     'bi-circle',
 };
+const MS_ICON_BOX = {
+  completed:   { icon: 'bi-bookmark-fill', bg: '#ecfdf5', color: '#059669' },
+  in_progress: { icon: 'bi-play-fill',     bg: '#eff6ff', color: '#2563eb' },
+  delayed:     { icon: 'bi-exclamation',   bg: '#fffbeb', color: '#d97706' },
+  skipped:     { icon: 'bi-dash',          bg: '#f9fafb', color: '#9ca3af' },
+  pending:     { icon: 'bi-circle',        bg: 'var(--surface-2)', color: 'var(--muted)' },
+};
 
-/* ── InfoRow helper ───────────────────────────────────────── */
-const InfoRow = ({ label, value }) => (
-  <div className="sd-info-row">
-    <span className="sd-info-label">{label}</span>
-    <span className="sd-info-value">{value || '—'}</span>
-  </div>
-);
+const DOC_STATUS_MAP = { signed: 'signed', completed: 'signed', sent: 'sent', pending: 'pending', draft: 'pending' };
 
-/* ── Milestone Edit Modal ─────────────────────────────────── */
+/* ── Milestone Edit Modal ────────────────────────────────────── */
 const MilestoneEditModal = ({ milestone, shipmentId, onClose, onSaved }) => {
   const [form, setForm] = useState({
     status:      milestone.status || 'pending',
@@ -91,49 +101,49 @@ const MilestoneEditModal = ({ milestone, shipmentId, onClose, onSaved }) => {
         <Modal.Header closeButton><Modal.Title>{milestone.event}</Modal.Title></Modal.Header>
         <Modal.Body>
           {err && <Alert variant="danger" className="py-2">{err}</Alert>}
-          <Row className="g-3">
-            <Col xs={12}>
+          <div className="row g-3">
+            <div className="col-12">
               <Form.Label>Status</Form.Label>
               <Form.Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 {['pending','in_progress','completed','delayed','skipped'].map((s) => (
                   <option key={s} value={s}>{s.replace('_',' ').replace(/^\w/, c => c.toUpperCase())}</option>
                 ))}
               </Form.Select>
-            </Col>
-            <Col sm={6}>
+            </div>
+            <div className="col-sm-6">
               <Form.Label>Planned Date</Form.Label>
               <Form.Control type="date" value={form.plannedDate}
                 onChange={(e) => setForm({ ...form, plannedDate: e.target.value })} />
-            </Col>
-            <Col sm={6}>
+            </div>
+            <div className="col-sm-6">
               <Form.Label>Actual Date</Form.Label>
               <Form.Control type="date" value={form.actualDate}
                 onChange={(e) => setForm({ ...form, actualDate: e.target.value })} />
-            </Col>
-            <Col xs={12}>
+            </div>
+            <div className="col-12">
               <Form.Label>Location</Form.Label>
               <Form.Control value={form.location}
                 onChange={(e) => setForm({ ...form, location: e.target.value })} />
-            </Col>
-            <Col xs={12}>
+            </div>
+            <div className="col-12">
               <Form.Label>Remarks</Form.Label>
               <Form.Control as="textarea" rows={2} value={form.remarks}
                 onChange={(e) => setForm({ ...form, remarks: e.target.value })} />
-            </Col>
-          </Row>
+            </div>
+          </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="submit" variant="primary" disabled={saving}>
+          <button type="button" className="btn" onClick={onClose} disabled={saving}>Cancel</button>
+          <button type="submit" className="btn btn-brand" disabled={saving}>
             {saving ? 'Saving…' : 'Save Changes'}
-          </Button>
+          </button>
         </Modal.Footer>
       </Form>
     </Modal>
   );
 };
 
-/* ── Approval Modal ───────────────────────────────────────── */
+/* ── Approval Modal ──────────────────────────────────────────── */
 const ApprovalModal = ({ shipmentId, action, onClose, onSaved }) => {
   const [note, setNote]     = useState('');
   const [saving, setSaving] = useState(false);
@@ -155,8 +165,8 @@ const ApprovalModal = ({ shipmentId, action, onClose, onSaved }) => {
         <Modal.Header closeButton>
           <Modal.Title>
             {action === 'approve'
-              ? <><i className="bi bi-check-circle text-success me-2"></i>Approve Shipment</>
-              : <><i className="bi bi-x-circle text-danger me-2"></i>Reject Shipment</>}
+              ? <><i className="bi bi-check-circle text-success me-2" />Approve Shipment</>
+              : <><i className="bi bi-x-circle text-danger me-2" />Reject Shipment</>}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
@@ -169,17 +179,68 @@ const ApprovalModal = ({ shipmentId, action, onClose, onSaved }) => {
           </Form.Group>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="submit" variant={action === 'approve' ? 'success' : 'danger'} disabled={saving}>
+          <button type="button" className="btn" onClick={onClose} disabled={saving}>Cancel</button>
+          <button type="submit" className={`btn ${action === 'approve' ? 'btn-brand' : ''}`}
+            style={action !== 'approve' ? { background: '#dc2626', color: '#fff', border: 'none' } : {}}
+            disabled={saving}>
             {saving ? 'Processing…' : action === 'approve' ? 'Confirm Approval' : 'Confirm Rejection'}
-          </Button>
+          </button>
         </Modal.Footer>
       </Form>
     </Modal>
   );
 };
 
-/* ── Tracking Panel ───────────────────────────────────────── */
+/* ── Update Status Modal ─────────────────────────────────────── */
+const UpdateStatusModal = ({ shipment, onClose, onSaved }) => {
+  const [status, setStatus] = useState(shipment.status);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr]       = useState('');
+
+  const submit = async (e) => {
+    e.preventDefault(); setSaving(true); setErr('');
+    try {
+      await shipmentsApi.update(shipment._id, { status });
+      onSaved();
+    } catch (ex) { setErr(ex.response?.data?.message || 'Update failed'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Modal show onHide={onClose} centered>
+      <Form onSubmit={submit}>
+        <Modal.Header closeButton><Modal.Title>Update Shipment Status</Modal.Title></Modal.Header>
+        <Modal.Body>
+          {err && <Alert variant="danger" className="py-2">{err}</Alert>}
+          <Form.Group>
+            <Form.Label>New Status</Form.Label>
+            <Form.Select value={status} onChange={(e) => setStatus(e.target.value)}>
+              {STATUS_ORDER.map((s) => (
+                <option key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</option>
+              ))}
+            </Form.Select>
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <button type="button" className="btn" onClick={onClose} disabled={saving}>Cancel</button>
+          <button type="submit" className="btn btn-brand" disabled={saving}>
+            {saving ? 'Updating…' : 'Update Status'}
+          </button>
+        </Modal.Footer>
+      </Form>
+    </Modal>
+  );
+};
+
+/* ── Tasks Panel ─────────────────────────────────────────────── */
+const PRIORITY_META = {
+  urgent: { color: '#dc2626', bg: '#fef2f2' },
+  high:   { color: '#d97706', bg: '#fffbeb' },
+  normal: { color: '#2563eb', bg: '#eff6ff' },
+  low:    { color: '#6b7280', bg: '#f9fafb' },
+};
+
+/* ── Tracking Panel ──────────────────────────────────────────── */
 const EVT_ICON = {
   completed: { icon: 'bi-check-circle-fill', color: '#16a34a' },
   detected:  { icon: 'bi-broadcast',         color: '#2563eb' },
@@ -187,8 +248,8 @@ const EVT_ICON = {
 
 const TrackingPanel = ({ shipmentId, shipment }) => {
   const [tracking, setTracking] = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState('');
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -203,15 +264,15 @@ const TrackingPanel = ({ shipmentId, shipment }) => {
   useEffect(() => { load(); }, [load]);
 
   if (loading) return (
-    <div className="ss-loading" style={{ minHeight: 180 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '40px 0' }}>
       <div className="dashboard-loader">
-        <div className="dashboard-loader-ring"></div>
-        <i className="bi bi-broadcast dashboard-loader-icon"></i>
+        <div className="dashboard-loader-ring" />
+        <i className="bi bi-broadcast dashboard-loader-icon" />
       </div>
-      <span>Fetching tracking data…</span>
+      <span style={{ fontSize: 13, color: 'var(--muted)' }}>Fetching tracking data…</span>
     </div>
   );
-  if (error) return <div className="alert alert-danger">{error}</div>;
+  if (error) return <div className="chip chip-danger" style={{ padding: '10px 16px' }}>{error}</div>;
   if (!tracking) return null;
 
   const showMap = tracking.origin && tracking.destination && tracking.vesselPosition;
@@ -221,30 +282,22 @@ const TrackingPanel = ({ shipmentId, shipment }) => {
 
   return (
     <div>
-      {/* Header strip */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 600 }}>
-            Provider:{' '}
-            <span style={{ color: 'var(--brand)', textTransform: 'capitalize' }}>
-              {tracking.provider}
-            </span>
+            Provider: <span style={{ color: 'var(--brand)', textTransform: 'capitalize' }}>{tracking.provider}</span>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--bs-secondary-color)' }}>
-            {tracking.trackingNumber && <>Ref: {tracking.trackingNumber}</>}
-            {shipment.lastTrackingUpdate && (
-              <> · Updated {fmt(shipment.lastTrackingUpdate)}</>
-            )}
-          </div>
+          {tracking.trackingNumber && (
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Ref: {tracking.trackingNumber}</div>
+          )}
         </div>
-        <button className="ss-action-btn" onClick={load}>
-          <i className="bi bi-arrow-clockwise me-2"></i>Refresh
+        <button className="sd-btn" onClick={load}>
+          <i className="bi bi-arrow-clockwise" /> Refresh
         </button>
       </div>
 
-      {/* Map */}
       {showMap && (
-        <div className="mb-4">
+        <div className="card card-flush mb-4" style={{ overflow: 'hidden' }}>
           <VesselMap
             origin={tracking.origin}
             destination={tracking.destination}
@@ -254,72 +307,43 @@ const TrackingPanel = ({ shipmentId, shipment }) => {
         </div>
       )}
 
-      {/* Events timeline */}
-      <div className="sd-section-title">Tracking Events</div>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', marginBottom: 12 }}>
+        Tracking Events
+      </div>
       {sortedEvents.length === 0 ? (
         <div className="dash-empty-state">
-          <i className="bi bi-broadcast"></i>
+          <i className="bi bi-broadcast" style={{ fontSize: 28, opacity: 0.3 }} />
           <div>No tracking events yet</div>
-          <small style={{ color: 'var(--bs-secondary-color)' }}>
-            Events appear once the carrier reports activity
-          </small>
         </div>
-      ) : (
-        <div className="milestone-timeline">
-          {sortedEvents.map((ev, i) => {
-            const meta = EVT_ICON[ev.status] || EVT_ICON.detected;
-            return (
-              <div key={i} className="milestone-item done">
-                <span className="milestone-dot completed"></span>
-                <div className="flex-grow-1">
-                  <div className="d-flex align-items-center gap-2 flex-wrap">
-                    <i className={`bi ${meta.icon}`} style={{ color: meta.color, fontSize: 14 }}></i>
-                    <span className="fw-semibold" style={{ fontSize: 13 }}>{ev.event}</span>
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
-                      background: meta.color + '22', color: meta.color,
-                    }}>{ev.status}</span>
-                  </div>
-                  <div className="small text-muted ms-4 mt-1">
-                    {ev.location && <><i className="bi bi-geo-alt me-1"></i>{ev.location} · </>}
-                    {fmt(ev.timestamp)}
-                  </div>
-                </div>
+      ) : sortedEvents.map((ev, i) => {
+        const meta = EVT_ICON[ev.status] || EVT_ICON.detected;
+        return (
+          <div key={i} className="sd-ms-item" style={{ paddingBottom: 10 }}>
+            <div className="sd-ms-icon" style={{ background: `${meta.color}15`, color: meta.color }}>
+              <i className={`bi ${meta.icon}`} />
+            </div>
+            <div className="sd-ms-body">
+              <div className="sd-ms-name">{ev.event}</div>
+              <div className="sd-ms-sub">
+                {ev.location && <><i className="bi bi-geo-alt me-1" />{ev.location} · </>}
+                {new Date(ev.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };
 
-/* ── Tasks Panel ───────────────────────────────────────────── */
-const PRIORITY_META = {
-  urgent: { color: '#dc2626', bg: '#fef2f2' },
-  high:   { color: '#d97706', bg: '#fffbeb' },
-  normal: { color: '#2563eb', bg: '#eff6ff' },
-  low:    { color: '#6b7280', bg: '#f9fafb' },
-};
-
-function SlaBadge({ dueAt, status, slaBreached }) {
-  if (!dueAt || status === 'done' || status === 'cancelled') return null;
-  const diff = new Date(dueAt) - Date.now();
-  const hrs  = diff / 3600000;
-  if (slaBreached || hrs < 0) {
-    return <span className="badge rounded-pill ms-2" style={{ background: '#fef2f2', color: '#dc2626', fontSize: 10 }}>Overdue</span>;
-  }
-  if (hrs < 24) return <span className="badge rounded-pill ms-2" style={{ background: '#fffbeb', color: '#d97706', fontSize: 10 }}>{Math.round(hrs)}h left</span>;
-  return <span className="badge rounded-pill ms-2" style={{ background: '#f0fdf4', color: '#059669', fontSize: 10 }}>{Math.round(hrs / 24)}d left</span>;
-}
-
+/* ── Tasks Panel ─────────────────────────────────────────────── */
 const TasksPanel = ({ shipmentId, shipmentNumber }) => {
-  const [tasks, setTasks]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [users, setUsers]   = useState([]);
+  const [tasks, setTasks]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [users, setUsers]       = useState([]);
   const [creating, setCreating] = useState(false);
-  const [form, setForm]     = useState({ title: '', priority: 'normal', assignedTo: '', dueAt: '' });
-  const [saving, setSaving] = useState(false);
+  const [form, setForm]         = useState({ title: '', priority: 'normal', assignedTo: '', dueAt: '' });
+  const [saving, setSaving]     = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -336,41 +360,41 @@ const TasksPanel = ({ shipmentId, shipmentNumber }) => {
   }, []);
 
   const handleCreate = async (e) => {
-    e.preventDefault();
-    setSaving(true);
+    e.preventDefault(); setSaving(true);
     try {
       await tasksApi.create({
-        title: form.title,
-        priority: form.priority,
+        title: form.title, priority: form.priority,
         assignedTo: form.assignedTo || undefined,
         dueAt: form.dueAt || undefined,
         linkedTo: { kind: 'Shipment', id: shipmentId, label: shipmentNumber },
       });
       setForm({ title: '', priority: 'normal', assignedTo: '', dueAt: '' });
-      setCreating(false);
-      load();
+      setCreating(false); load();
     } catch { /* ignore */ }
     finally { setSaving(false); }
   };
 
-  const quickDone = async (taskId) => {
-    await tasksApi.complete(taskId);
-    load();
-  };
+  const quickDone = async (taskId) => { await tasksApi.complete(taskId); load(); };
 
-  if (loading) return <div className="text-center py-4"><div className="spinner-border spinner-border-sm text-primary" /></div>;
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+      <div className="spinner-border spinner-border-sm" style={{ color: 'var(--brand)' }} />
+    </div>
+  );
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <span className="text-muted small">{tasks.length} task{tasks.length !== 1 ? 's' : ''} linked to this shipment</span>
-        <button className="btn btn-sm btn-outline-primary" onClick={() => setCreating((x) => !x)}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+          {tasks.length} task{tasks.length !== 1 ? 's' : ''} linked to this shipment
+        </span>
+        <button className="btn" style={{ fontSize: 13 }} onClick={() => setCreating((x) => !x)}>
           <i className="bi bi-plus me-1" />Add Task
         </button>
       </div>
 
       {creating && (
-        <form onSubmit={handleCreate} className="card border-0 bg-light rounded-3 p-3 mb-3">
+        <form onSubmit={handleCreate} className="card mb-3" style={{ padding: 16, background: 'var(--surface-2)' }}>
           <div className="row g-2">
             <div className="col-12">
               <input className="form-control form-control-sm" placeholder="Task title…" value={form.title}
@@ -394,44 +418,47 @@ const TasksPanel = ({ shipmentId, shipmentNumber }) => {
                 onChange={(e) => setForm((f) => ({ ...f, dueAt: e.target.value }))} />
             </div>
             <div className="col-12 d-flex gap-2">
-              <button type="submit" className="btn btn-sm btn-primary" disabled={saving}>
+              <button type="submit" className="btn btn-brand btn-sm" disabled={saving}>
                 {saving ? 'Saving…' : 'Create Task'}
               </button>
-              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setCreating(false)}>Cancel</button>
+              <button type="button" className="btn btn-sm" onClick={() => setCreating(false)}>Cancel</button>
             </div>
           </div>
         </form>
       )}
 
       {tasks.length === 0 && !creating && (
-        <div className="text-center text-muted py-5">
-          <i className="bi bi-check2-square d-block mb-2" style={{ fontSize: 32 }} />
-          No tasks yet — create one or configure workflow rules to generate them automatically.
+        <div className="dash-empty-state">
+          <i className="bi bi-check2-square" style={{ fontSize: 32 }} />
+          <div>No tasks yet</div>
+          <span>Create one or configure workflow rules to generate them automatically.</span>
         </div>
       )}
 
-      <div className="d-flex flex-column gap-2">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {tasks.map((task) => {
-          const pm = PRIORITY_META[task.priority] || PRIORITY_META.normal;
+          const pm   = PRIORITY_META[task.priority] || PRIORITY_META.normal;
           const done = task.status === 'done' || task.status === 'cancelled';
           return (
-            <div key={task._id} className={`card border-0 shadow-sm ${done ? 'opacity-50' : ''}`} style={{ borderRadius: 8 }}>
-              <div className="card-body py-2 px-3 d-flex align-items-center gap-3">
-                <button className="btn btn-sm p-0" style={{ lineHeight: 1 }} onClick={() => !done && quickDone(task._id)}
-                  title={done ? task.status : 'Mark done'}>
-                  <i className={`bi ${done ? 'bi-check-circle-fill text-success' : 'bi-circle text-muted'}`} style={{ fontSize: 18 }} />
+            <div key={task._id} className="card" style={{ padding: '10px 14px', opacity: done ? 0.6 : 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', lineHeight: 1 }}
+                  onClick={() => !done && quickDone(task._id)} title={done ? task.status : 'Mark done'}>
+                  <i className={`bi ${done ? 'bi-check-circle-fill' : 'bi-circle'}`}
+                    style={{ fontSize: 18, color: done ? '#16a34a' : 'var(--muted)' }} />
                 </button>
-                <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                  <div className={`fw-semibold ${done ? 'text-decoration-line-through text-muted' : ''}`} style={{ fontSize: 13 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)',
+                    textDecoration: done ? 'line-through' : 'none', color: done ? 'var(--muted)' : 'var(--ink)' }}>
                     {task.title}
-                    <SlaBadge dueAt={task.dueAt} status={task.status} slaBreached={task.slaBreached} />
                   </div>
-                  <div className="text-muted" style={{ fontSize: 11 }}>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
                     {task.assignedTo?.name && <><i className="bi bi-person me-1" />{task.assignedTo.name} · </>}
                     {task.dueAt && new Date(task.dueAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </div>
                 </div>
-                <span className="badge rounded-pill flex-shrink-0" style={{ background: pm.bg, color: pm.color, fontSize: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 99,
+                  background: pm.bg, color: pm.color, flexShrink: 0 }}>
                   {task.priority}
                 </span>
               </div>
@@ -443,24 +470,26 @@ const TasksPanel = ({ shipmentId, shipmentNumber }) => {
   );
 };
 
-/* ── Main Component ───────────────────────────────────────── */
+/* ── Main Component ──────────────────────────────────────────── */
 const ShipmentDetail = () => {
-  const { id } = useParams();
-  const { user } = useAuth();
+  const { id }       = useParams();
+  const { user }     = useAuth();
+  const navigate     = useNavigate();
 
   const isOps      = ['admin', 'manager', 'operations'].includes(user?.role);
   const isApprover = ['admin', 'manager'].includes(user?.role);
   const isFinance  = ['admin', 'manager', 'finance'].includes(user?.role);
   const isStaff    = ['admin', 'manager', 'operations', 'sales', 'customer_service'].includes(user?.role);
 
-  const [shipment, setShipment]   = useState(null);
-  const [docs, setDocs]           = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState('');
-  const [activeTab, setActiveTab] = useState('overview');
-  const [editingMs, setEditingMs] = useState(null);
-  const [approvalAction, setApprovalAction] = useState(null);
-  const [printingBL, setPrintingBL] = useState(false);
+  const [shipment,      setShipment]     = useState(null);
+  const [docs,          setDocs]         = useState([]);
+  const [loading,       setLoading]      = useState(true);
+  const [error,         setError]        = useState('');
+  const [activeTab,     setActiveTab]    = useState('overview');
+  const [editingMs,     setEditingMs]    = useState(null);
+  const [approvalAction,setApprovalAction] = useState(null);
+  const [showUpdateStatus,setShowUpdateStatus] = useState(false);
+  const [printingBL,    setPrintingBL]   = useState(false);
 
   const load = async () => {
     setLoading(true); setError('');
@@ -502,6 +531,10 @@ const ShipmentDetail = () => {
   const profit = revenue - cost;
   const margin = revenue > 0 ? (profit / revenue * 100).toFixed(1) : '0.0';
 
+  const transitDays = shipment?.etd && shipment?.eta
+    ? Math.ceil((new Date(shipment.eta) - new Date(shipment.etd)) / 86400000)
+    : null;
+
   const handlePrintBL = async () => {
     setPrintingBL(true);
     try { await shipmentsApi.printBL(id); }
@@ -509,506 +542,588 @@ const ShipmentDetail = () => {
     finally { setPrintingBL(false); }
   };
 
-  if (loading) {
-    return (
-      <div className="ss-loading" style={{ minHeight: 400 }}>
-        <div className="dashboard-loader">
-          <div className="dashboard-loader-ring"></div>
-          <i className="bi bi-box-seam dashboard-loader-icon"></i>
-        </div>
-        <span>Loading shipment…</span>
+  if (loading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, gap: 12 }}>
+      <div className="dashboard-loader">
+        <div className="dashboard-loader-ring" />
+        <i className="bi bi-box-seam dashboard-loader-icon" />
       </div>
-    );
-  }
-  if (error) return <div className="py-4"><div className="alert alert-danger">{error}</div></div>;
+      <span style={{ fontSize: 13, color: 'var(--muted)' }}>Loading shipment…</span>
+    </div>
+  );
+  if (error) return <div className="page"><div className="chip chip-danger" style={{ padding: '10px 16px' }}>{error}</div></div>;
   if (!shipment) return null;
 
-  const sc  = STATUS_CONFIG[shipment.status]         || { color: '#6b7280', bg: '#f3f4f6', label: shipment.status };
-  const apc = APPROVAL_CONFIG[shipment.approvalStatus] || APPROVAL_CONFIG.pending;
+  const sc  = STATUS_CONFIG[shipment.status] || { color: '#6b7280', bg: '#f3f4f6', label: shipment.status };
+  const mc  = MODE_CONFIG[shipment.mode]     || { icon: 'bi-box', color: '#6b7280', label: (shipment.mode || '?').toUpperCase() };
+
+  const polCode = shipment.portOfLoading?.code  || shipment.portOfLoading?.city  || '—';
+  const podCode = shipment.portOfDischarge?.code || shipment.portOfDischarge?.city || '—';
+  const polCity = shipment.portOfLoading?.name  || shipment.portOfLoading?.city  || '—';
+  const podCity = shipment.portOfDischarge?.name || shipment.portOfDischarge?.city || '—';
 
   const TABS = [
-    { key: 'overview',   label: 'Overview',   icon: 'bi-info-circle' },
-    { key: 'milestones', label: 'Milestones', icon: 'bi-signpost-split', badge: totalMs },
-    { key: 'tracking',   label: 'Tracking',   icon: 'bi-broadcast',
-      show: ['sea', 'air', 'multimodal'].includes(shipment?.mode) },
-    { key: 'tasks',      label: 'Tasks',      icon: 'bi-check2-square' },
-    { key: 'charges',    label: 'Charges',    icon: 'bi-currency-dollar', badge: charges.length, roles: ['admin','manager','operations','sales','finance'] },
-    { key: 'documents',  label: 'Documents',  icon: 'bi-file-earmark-text', badge: docs.length },
-  ]
-    .filter((t) => !t.roles || t.roles.includes(user?.role))
-    .filter((t) => t.show === undefined || t.show);
+    { key: 'overview',   label: 'Overview' },
+    { key: 'milestones', label: 'Milestones', badge: totalMs },
+    { key: 'containers', label: 'Containers', badge: shipment.containers?.length || 0 },
+    { key: 'documents',  label: 'Documents',  badge: docs.length },
+    ...(isFinance ? [{ key: 'financials', label: 'Financials', badge: charges.length }] : []),
+    ...(['sea','air','multimodal'].includes(shipment.mode) ? [{ key: 'tracking', label: 'Tracking' }] : []),
+    { key: 'messages',   label: 'Messages' },
+  ];
+
+  /* ── Revenue charge categories for Cost Summary ── */
+  const revenueByCategory = charges
+    .filter((c) => c.type === 'revenue')
+    .reduce((acc, c) => {
+      const cat = c.category || c.description || 'Other';
+      acc[cat] = (acc[cat] || 0) + (c.amount || 0) * (c.exchangeRate || 1) * (c.quantity || 1);
+      return acc;
+    }, {});
 
   return (
-    <div>
-      {/* ── Page header ───────────────────────────────────────── */}
-      <div className="ss-page-header">
-        <div>
-          <Link to="/shipments" className="text-decoration-none small" style={{ color: 'var(--bs-secondary-color)' }}>
-            <i className="bi bi-arrow-left me-1"></i>All Shipments
-          </Link>
-          <div className="d-flex align-items-center gap-2 mt-1 flex-wrap">
-            <h4 className="ss-page-title mb-0">{shipment.shipmentNumber}</h4>
-            <span className="sd-status-pill" style={{ color: sc.color, background: sc.bg }}>{sc.label}</span>
-            <span className="sd-status-pill" style={{ color: apc.color, background: apc.bg }}>
-              <i className={`bi ${apc.icon}`}></i>{apc.label}
-            </span>
-          </div>
-          <div className="ss-page-sub mt-1">
-            {[
-              shipment.mode?.toUpperCase(),
-              shipment.direction?.replace('_', ' '),
-              shipment.type,
-              shipment.mblNumber && `MBL: ${shipment.mblNumber}`,
-              shipment.hblNumber && `HBL: ${shipment.hblNumber}`,
-              shipment.awbNumber && `AWB: ${shipment.awbNumber}`,
-            ].filter(Boolean).join(' · ')}
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+
+      {/* ── Page Header ──────────────────────────────────────── */}
+      <div className="sd-page-header">
+        {/* Breadcrumb */}
+        <div className="sd-breadcrumb">
+          <Link to="/shipments">Shipments</Link>
+          <i className="bi bi-chevron-right" style={{ fontSize: 10 }} />
+          <span className="mono" style={{ fontSize: 12 }}>{shipment.shipmentNumber}</span>
         </div>
-        <div className="ss-header-actions">
-          {isStaff && (
-            <button className="ss-action-btn" onClick={handlePrintBL} disabled={printingBL}>
-              <i className="bi bi-printer me-2"></i>{printingBL ? 'Generating…' : 'Print BL'}
-            </button>
-          )}
-          {isStaff && (
-            <Link to={`/shipments/${id}/edit`} className="ss-action-btn">
-              <i className="bi bi-pencil me-2"></i>Edit
-            </Link>
-          )}
-          {isApprover && shipment.approvalStatus === 'pending' && (
-            <>
-              <button
-                className="ss-action-btn ss-action-btn-primary"
-                onClick={() => setApprovalAction('approve')}
-              >
-                <i className="bi bi-check-lg me-2"></i>Approve
+
+        {/* Title row */}
+        <div className="sd-header-row">
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <h1 className="sd-title">{shipment.shipmentNumber}</h1>
+              {/* Status chip */}
+              <span className="sd-chip" style={{ color: sc.color, background: sc.bg }}>
+                <span className="sd-chip-dot" style={{ background: sc.color }} />
+                {sc.label}
+              </span>
+              {/* Mode chip */}
+              <span className="sd-chip" style={{ color: mc.color, background: `${mc.color}15`, border: `1px solid ${mc.color}30` }}>
+                <i className={`bi ${mc.icon}`} style={{ fontSize: 11 }} />
+                {mc.label}
+                {shipment.direction && <span style={{ opacity: 0.6, fontSize: 10, marginLeft: 2 }}>
+                  {shipment.direction === 'export' ? 'E' : shipment.direction === 'import' ? 'I' : ''}
+                </span>}
+              </span>
+            </div>
+            <div className="sd-subline">
+              {[
+                shipment.client?.companyName || shipment.shipper?.companyName,
+                shipment.vesselName && `Vessel ${shipment.vesselName}`,
+                shipment.mblNumber  && `MBL: ${shipment.mblNumber}`,
+              ].filter(Boolean).join(' · ')}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="sd-actions">
+            {isStaff && (
+              <button className="sd-btn" onClick={() => navigate(`/shipments/${id}/edit`)}>
+                <i className="bi bi-pencil" /> Edit
               </button>
-              <button
-                className="ss-action-btn"
-                style={{ color: '#dc2626', borderColor: '#fca5a5' }}
-                onClick={() => setApprovalAction('reject')}
-              >
-                <i className="bi bi-x-lg me-2"></i>Reject
+            )}
+            {isStaff && (
+              <button className="sd-btn" onClick={handlePrintBL} disabled={printingBL}>
+                <i className="bi bi-printer" /> {printingBL ? 'Generating…' : 'Print BOL'}
               </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ── Progress bar ──────────────────────────────────────── */}
-      <div className="erp-card mb-4">
-        <div className="erp-card-body" style={{ padding: '12px 20px' }}>
-          <div className="d-flex justify-content-between align-items-center mb-2">
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--bs-secondary-color)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Shipment Progress
-            </span>
-            <span style={{ fontSize: 12, color: 'var(--bs-secondary-color)' }}>
-              {completedMs}/{totalMs} milestones ·{' '}
-              <strong style={{ color: 'var(--brand)' }}>{msPct}%</strong>
-            </span>
-          </div>
-          <div className="sd-progress-track">
-            <div className="sd-progress-fill" style={{ width: `${msPct}%` }} />
-          </div>
-        </div>
-      </div>
-
-      {/* ── 4-tile KPI strip ──────────────────────────────────── */}
-      <div className="inv-summary-strip mb-4">
-        <div className="inv-summary-tile">
-          <div className="inv-summary-label"><i className="bi bi-geo me-1"></i>Origin</div>
-          <div className="inv-summary-value" style={{ fontSize: '1rem' }}>
-            {shipment.portOfLoading?.code || '—'}
-          </div>
-          <div className="inv-summary-sub">
-            {shipment.portOfLoading?.name || shipment.portOfLoading?.city || '—'}
-          </div>
-        </div>
-        <div className="inv-summary-tile">
-          <div className="inv-summary-label"><i className="bi bi-geo-fill me-1"></i>Destination</div>
-          <div className="inv-summary-value" style={{ fontSize: '1rem' }}>
-            {shipment.portOfDischarge?.code || '—'}
-          </div>
-          <div className="inv-summary-sub">
-            {shipment.portOfDischarge?.name || shipment.portOfDischarge?.city || '—'}
-          </div>
-        </div>
-        <div className="inv-summary-tile">
-          <div className="inv-summary-label"><i className="bi bi-calendar-check me-1"></i>ETD</div>
-          <div className="inv-summary-value" style={{ fontSize: '1rem' }}>{fmt(shipment.etd)}</div>
-          <div className="inv-summary-sub">
-            {shipment.atd ? `ATD: ${fmt(shipment.atd)}` : 'Actual pending'}
-          </div>
-        </div>
-        <div className="inv-summary-tile">
-          <div className="inv-summary-label"><i className="bi bi-calendar2-check me-1"></i>ETA</div>
-          <div className="inv-summary-value" style={{ fontSize: '1rem' }}>{fmt(shipment.eta)}</div>
-          <div className="inv-summary-sub">
-            {shipment.ata ? `ATA: ${fmt(shipment.ata)}` : 'Actual pending'}
+            )}
+            {isStaff && (
+              <button className="sd-btn">
+                <i className="bi bi-envelope" /> Send docs
+              </button>
+            )}
+            {isApprover && shipment.approvalStatus === 'pending' && (
+              <>
+                <button className="sd-btn" onClick={() => setApprovalAction('approve')}
+                  style={{ color: '#16a34a', borderColor: '#86efac' }}>
+                  <i className="bi bi-check-lg" /> Approve
+                </button>
+                <button className="sd-btn" onClick={() => setApprovalAction('reject')}
+                  style={{ color: '#dc2626', borderColor: '#fca5a5' }}>
+                  <i className="bi bi-x-lg" /> Reject
+                </button>
+              </>
+            )}
+            {isOps && (
+              <button className="sd-btn sd-btn-primary" onClick={() => setShowUpdateStatus(true)}>
+                <i className="bi bi-arrow-repeat" /> Update Status
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* ── Tabbed card ───────────────────────────────────────── */}
-      <div className="erp-card">
-        <div className="sd-tab-nav">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              className={`sd-tab-btn${activeTab === t.key ? ' active' : ''}`}
-              onClick={() => setActiveTab(t.key)}
-            >
-              <i className={`bi ${t.icon}`}></i>
-              {t.label}
-              {t.badge > 0 && <span className="sd-tab-badge">{t.badge}</span>}
-            </button>
-          ))}
+      {/* ── Route Hero Card ───────────────────────────────────── */}
+      <div className="sd-hero">
+        <div className="sd-hero-route">
+          {/* Origin */}
+          <div className="sd-hero-port">
+            <div className="sd-hero-port-label">Origin</div>
+            <div className="sd-hero-port-code">{polCode}</div>
+            <div className="sd-hero-port-city">{polCity}</div>
+            <div className="sd-hero-port-date">
+              <span>ETD </span>{fmt(shipment.etd)}
+            </div>
+          </div>
+
+          {/* Center */}
+          <div className="sd-hero-center">
+            <i className={`bi ${mc.icon} sd-hero-mode-icon`} style={{ color: mc.color }} />
+            {transitDays && <div className="sd-hero-transit">{transitDays}d transit</div>}
+            <div className="sd-transit-bar">
+              <div className="sd-transit-fill" style={{ width: `${msPct}%` }} />
+            </div>
+            <div className="sd-hero-status">{sc.label}</div>
+          </div>
+
+          {/* Destination */}
+          <div className="sd-hero-port sd-hero-port-right">
+            <div className="sd-hero-port-label">Destination</div>
+            <div className="sd-hero-port-code">{podCode}</div>
+            <div className="sd-hero-port-city">{podCity}</div>
+            <div className="sd-hero-port-date">
+              <span>ETA </span>{fmt(shipment.eta)}
+            </div>
+          </div>
         </div>
 
-        <div className="erp-card-body">
+      </div>
 
-          {/* ── OVERVIEW ── */}
-          {activeTab === 'overview' && (
-            <Row className="g-4">
-              <Col lg={4}>
-                <div className="sd-section-title">Parties</div>
-                {[
-                  { label: 'Shipper',      value: shipment.shipper?.companyName },
-                  { label: 'Consignee',    value: shipment.consignee?.companyName },
-                  { label: 'Notify Party', value: shipment.notifyParty?.companyName },
-                  { label: 'Customer',     value: shipment.customer?.companyName },
-                ].map(({ label, value }) => <InfoRow key={label} label={label} value={value} />)}
+      {/* ── Tab Nav ───────────────────────────────────────────── */}
+      <div className="sd-tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            className={`sd-tab-btn${activeTab === t.key ? ' active' : ''}`}
+            onClick={() => setActiveTab(t.key)}
+          >
+            {t.label}
+            {t.badge > 0 && <span className="sd-tab-badge">{t.badge}</span>}
+          </button>
+        ))}
+      </div>
 
-                <div className="sd-section-title">Commercial</div>
-                {[
-                  { label: 'Incoterm',      value: shipment.incoterm },
-                  { label: 'Payment Terms', value: shipment.paymentTerms },
-                  { label: 'Invoice Value', value: shipment.invoiceValue
-                      ? `${shipment.invoiceCurrency || 'USD'} ${Number(shipment.invoiceValue).toLocaleString()}`
-                      : null },
-                ].map(({ label, value }) => <InfoRow key={label} label={label} value={value} />)}
-              </Col>
+      {/* ── Tab Body ──────────────────────────────────────────── */}
+      <div className="sd-tab-body">
 
-              <Col lg={4}>
-                <div className="sd-section-title">Routing</div>
-                {[
-                  { label: 'Place of Receipt',  value: shipment.placeOfReceipt?.name  || shipment.placeOfReceipt?.city },
-                  { label: 'Port of Loading',   value: shipment.portOfLoading?.name },
-                  { label: 'Transhipment',      value: shipment.transhipmentPort?.name },
-                  { label: 'Port of Discharge', value: shipment.portOfDischarge?.name },
-                  { label: 'Place of Delivery', value: shipment.placeOfDelivery?.name || shipment.placeOfDelivery?.city },
-                ].map(({ label, value }) => <InfoRow key={label} label={label} value={value} />)}
+        {/* ── OVERVIEW ── */}
+        {activeTab === 'overview' && (
+          <div className="sd-2col">
+            {/* Left: Milestones */}
+            <div className="sd-card">
+              <div className="sd-ms-header">
+                <div className="sd-card-title" style={{ margin: 0 }}>Milestones</div>
+                <span className="sd-ms-count">{completedMs} of {totalMs} complete</span>
+              </div>
 
-                <div className="sd-section-title">Carrier</div>
-                {[
-                  { label: 'Carrier',       value: shipment.carrier },
-                  { label: 'Vessel',        value: shipment.vesselName },
-                  { label: 'Voyage',        value: shipment.voyageNumber },
-                  { label: 'Flight Number', value: shipment.flightNumber },
-                  { label: 'Booking No.',   value: shipment.bookingNumber },
-                ].map(({ label, value }) => <InfoRow key={label} label={label} value={value} />)}
-              </Col>
-
-              <Col lg={4}>
-                <div className="sd-section-title">Cargo</div>
-                {[
-                  { label: 'Total Packages',    value: shipment.totalPackages },
-                  { label: 'Gross Weight',      value: shipment.totalGrossWeight ? `${shipment.totalGrossWeight} KG` : null },
-                  { label: 'Net Weight',        value: shipment.totalNetWeight  ? `${shipment.totalNetWeight} KG`  : null },
-                  { label: 'Volume',            value: shipment.totalVolume     ? `${shipment.totalVolume} CBM`    : null },
-                  { label: 'Chargeable Wt.',   value: shipment.chargeableWeight ? `${shipment.chargeableWeight} KG` : null },
-                  { label: 'Containers',        value: shipment.containers?.length ? `${shipment.containers.length} unit(s)` : null },
-                ].map(({ label, value }) => <InfoRow key={label} label={label} value={value} />)}
-
-                {isFinance && (
-                  <>
-                    <div className="sd-section-title">Financials</div>
-                    {[
-                      { label: 'Revenue', value: fmtMoney(shipment.totalRevenue) },
-                      { label: 'Cost',    value: fmtMoney(shipment.totalCost) },
-                      { label: 'Profit',  value: fmtMoney(shipment.profit) },
-                      { label: 'Margin',  value: shipment.profitMargin ? `${shipment.profitMargin.toFixed(1)}%` : null },
-                    ].map(({ label, value }) => <InfoRow key={label} label={label} value={value} />)}
-                  </>
-                )}
-
-                {shipment.approvedBy && (
-                  <>
-                    <div className="sd-section-title">Approval</div>
-                    <InfoRow label="Status" value={
-                      <span style={{ color: apc.color, fontWeight: 700 }}>{apc.label}</span>
-                    } />
-                    <InfoRow label="Date" value={fmt(shipment.approvedAt)} />
-                    {shipment.approvalNote && <InfoRow label="Note" value={shipment.approvalNote} />}
-                  </>
-                )}
-              </Col>
-            </Row>
-          )}
-
-          {/* ── MILESTONES ── */}
-          {activeTab === 'milestones' && (
-            <Row>
-              <Col lg={8}>
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <span className="text-muted small">
-                    <strong style={{ color: 'var(--brand)' }}>{completedMs}</strong> of {totalMs} milestones completed
-                  </span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand)' }}>{msPct}%</span>
+              {totalMs === 0 ? (
+                <div className="dash-empty-state" style={{ padding: '32px 0' }}>
+                  <i className="bi bi-signpost-split" style={{ fontSize: 28, opacity: 0.3 }} />
+                  <span>No milestones recorded</span>
                 </div>
-                <div className="sd-progress-track mb-4">
-                  <div className="sd-progress-fill" style={{ width: `${msPct}%` }} />
-                </div>
-
-                {shipment.milestones?.length ? (
-                  <div className="milestone-timeline">
-                    {shipment.milestones.map((m, i) => {
-                      const isCurrent = i === currentMsIdx && m.status !== 'completed';
-                      const msKey = isCurrent && m.status === 'pending' ? 'in_progress' : m.status;
-                      return (
-                        <div key={m._id} className={`milestone-item${m.status === 'completed' ? ' done' : ''}`}>
-                          <span className={`milestone-dot ${m.status}`}></span>
-                          <div className="d-flex justify-content-between align-items-start gap-2">
-                            <div className="flex-grow-1">
-                              <div className="d-flex align-items-center gap-2 flex-wrap">
-                                <i
-                                  className={`bi ${MS_ICON[msKey] || 'bi-circle'}`}
-                                  style={{ color: MS_COLOR[msKey] || '#d1d5db', fontSize: 14 }}
-                                ></i>
-                                <span className={`fw-semibold${m.status === 'skipped' ? ' text-muted' : ''}`} style={{ fontSize: 13 }}>
-                                  {m.event}
-                                </span>
-                                {m.status !== 'pending' && (
-                                  <span style={{
-                                    fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
-                                    background: (MS_COLOR[m.status] || '#d1d5db') + '22',
-                                    color: MS_COLOR[m.status] || '#6b7280',
-                                  }}>
-                                    {m.status.replace('_', ' ')}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="small text-muted ms-4 mt-1">
-                                {m.location && <span><i className="bi bi-geo-alt me-1"></i>{m.location} · </span>}
-                                {m.actualDate
-                                  ? <span style={{ color: '#16a34a' }}>Completed {fmt(m.actualDate)}</span>
-                                  : m.plannedDate
-                                  ? <span>Planned {fmt(m.plannedDate)}</span>
-                                  : 'No date set'}
-                              </div>
-                              {m.remarks && <small className="text-muted fst-italic ms-4 d-block">{m.remarks}</small>}
-                            </div>
-                            {isOps && (
-                              <button
-                                className="ss-action-btn"
-                                style={{ fontSize: 11, padding: '3px 10px' }}
-                                onClick={() => setEditingMs(m)}
-                              >
-                                <i className="bi bi-pencil me-1"></i>Update
-                              </button>
-                            )}
+              ) : (
+                <div className="sd-ms-list">
+                  {shipment.milestones.map((m, i) => {
+                    const isCurrent = i === currentMsIdx && m.status !== 'completed';
+                    const msKey     = isCurrent && m.status === 'pending' ? 'in_progress' : m.status;
+                    const box       = MS_ICON_BOX[msKey] || MS_ICON_BOX.pending;
+                    const isLast    = i === shipment.milestones.length - 1;
+                    return (
+                      <div key={m._id || i} className={`sd-ms-item${isLast ? ' last' : ''}`}>
+                        <div className="sd-ms-icon-wrap">
+                          <div className="sd-ms-icon" style={{ background: box.bg, color: box.color }}>
+                            <i className={`bi ${box.icon}`} style={{ fontSize: 14 }} />
+                          </div>
+                          {!isLast && <div className="sd-ms-connector" />}
+                        </div>
+                        <div className="sd-ms-body">
+                          <div className="sd-ms-name">{m.event}</div>
+                          <div className="sd-ms-sub">
+                            {m.location ? m.location : m.remarks ? m.remarks : msKey === 'pending' ? 'Pending' : msKey.replace('_', ' ')}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="dash-empty-state">
-                    <i className="bi bi-signpost-split"></i>
-                    <div>No milestones recorded</div>
-                  </div>
-                )}
-              </Col>
-
-              {shipment.containers?.length > 0 && (
-                <Col lg={4}>
-                  <div className="sd-section-title">Containers ({shipment.containers.length})</div>
-                  {shipment.containers.map((c) => (
-                    <div key={c._id} className="sd-container-card">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <strong className="font-monospace" style={{ fontSize: 13 }}>
-                          {c.containerNumber || 'TBA'}
-                        </strong>
-                        <span style={{
-                          fontSize: 11, padding: '2px 8px', background: 'var(--surface-2)',
-                          borderRadius: 6, fontWeight: 600,
-                        }}>{c.containerType}</span>
+                        <div className={`sd-ms-date${m.status === 'completed' ? ' done' : ''}`}>
+                          {m.actualDate ? fmt(m.actualDate) : m.plannedDate ? fmt(m.plannedDate) : '—'}
+                        </div>
+                        {isOps && (
+                          <button className="sd-ms-edit-btn" onClick={() => setEditingMs(m)} title="Edit milestone">
+                            <i className="bi bi-pencil" style={{ fontSize: 11 }} />
+                          </button>
+                        )}
                       </div>
-                      {c.sealNumber  && <div className="text-muted small mt-1">Seal: {c.sealNumber}</div>}
-                      {c.grossWeight && <div className="text-muted small">GW: {c.grossWeight} KG · CBM: {c.cbm || '—'}</div>}
-                    </div>
-                  ))}
-                </Col>
+                    );
+                  })}
+                </div>
               )}
-            </Row>
-          )}
+            </div>
 
-          {/* ── TRACKING ── */}
-          {activeTab === 'tracking' && (
-            <TrackingPanel shipmentId={shipment._id} shipment={shipment} />
-          )}
-
-          {/* ── TASKS ── */}
-          {activeTab === 'tasks' && (
-            <TasksPanel shipmentId={shipment._id} shipmentNumber={shipment.shipmentNumber} />
-          )}
-
-          {/* ── CHARGES ── */}
-          {activeTab === 'charges' && (
-            <div>
-              <div className="sd-charge-pnl">
+            {/* Right: Details + Costs + Documents */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Shipment Details */}
+              <div className="sd-card">
+                <div className="sd-card-title">Shipment Details</div>
                 {[
-                  { label: 'Total Revenue', value: fmtMoney(revenue), color: '#16a34a', icon: 'bi-arrow-up-circle-fill' },
-                  { label: 'Total Cost',    value: fmtMoney(cost),    color: '#dc2626', icon: 'bi-arrow-down-circle-fill' },
-                  { label: 'Gross Profit',  value: fmtMoney(profit),  color: profit >= 0 ? '#2563eb' : '#dc2626', icon: 'bi-graph-up' },
-                  { label: 'Margin',        value: `${margin}%`,      color: parseFloat(margin) >= 15 ? '#16a34a' : '#d97706', icon: 'bi-percent' },
-                ].map(({ label, value, color, icon }) => (
-                  <div key={label} className="sd-charge-kpi">
-                    <div className="d-flex align-items-center gap-2 mb-1">
-                      <i className={`bi ${icon}`} style={{ color, fontSize: 14 }}></i>
-                      <span className="sd-charge-kpi-label">{label}</span>
-                    </div>
-                    <div className="sd-charge-kpi-value" style={{ color }}>{value}</div>
+                  { label: 'Mode',       value: `${shipment.mode || '—'} · ${shipment.direction || '—'}` },
+                  { label: 'Vessel',     value: shipment.vesselName || shipment.flightNumber || '—' },
+                  { label: 'Containers', value: shipment.containers?.length ? `${shipment.containers.length}` : '—' },
+                  { label: 'Weight',     value: shipment.totalGrossWeight ? `${Number(shipment.totalGrossWeight).toLocaleString()} kg` : '—' },
+                  { label: 'Commodity',  value: shipment.commodity || shipment.goodsDescription || '—' },
+                  { label: 'Incoterms', value: shipment.incoterm || '—' },
+                  { label: 'Booking No.', value: shipment.bookingNumber || '—' },
+                ].map(({ label, value }) => (
+                  <div key={label} className="sd-row">
+                    <span className="sd-row-label">{label}</span>
+                    <span className="sd-row-value">{value}</span>
                   </div>
                 ))}
               </div>
 
-              {charges.filter((c) => c.type === 'revenue').length > 0 && (
-                <div className="mb-4">
-                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#16a34a', marginBottom: 8 }}>
-                    <i className="bi bi-arrow-up-circle me-2"></i>Revenue Lines
+              {/* Cost Summary */}
+              {isFinance && (
+                <div className="sd-card">
+                  <div className="sd-card-title">Cost Summary</div>
+                  {Object.entries(revenueByCategory).map(([cat, amt]) => (
+                    <div key={cat} className="sd-row">
+                      <span className="sd-row-label" style={{ textTransform: 'capitalize' }}>
+                        {cat.replace(/_/g, ' ')}
+                      </span>
+                      <span className="sd-row-value mono">${amt.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                  ))}
+                  {charges.length === 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--muted)', padding: '8px 0' }}>No charges entered yet</div>
+                  )}
+                  <div className="sd-cost-total">
+                    <span>Total billed</span>
+                    <span className="mono" style={{ color: 'var(--brand)' }}>
+                      ${revenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                    </span>
                   </div>
-                  <table className="erp-table">
-                    <thead>
-                      <tr>
-                        <th>Description</th><th>Category</th>
-                        <th className="text-end">Amount</th><th className="text-end">Qty</th>
-                        <th className="text-center">FX</th><th className="text-end">Total (USD)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {charges.filter((c) => c.type === 'revenue').map((c) => (
-                        <tr key={c._id}>
-                          <td>{c.description}</td>
-                          <td>
-                            <span style={{ fontSize: 11, padding: '1px 7px', background: 'var(--surface-2)', borderRadius: 4, fontWeight: 600 }}>
-                              {c.category}
-                            </span>
-                          </td>
-                          <td className="text-end font-monospace small">
-                            {c.currency} {(c.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="text-end">{c.quantity || 1}</td>
-                          <td className="text-center">{c.exchangeRate || 1}</td>
-                          <td className="text-end fw-bold font-monospace" style={{ color: '#16a34a' }}>
-                            {((c.amount || 0) * (c.exchangeRate || 1) * (c.quantity || 1)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="sd-cost-margin">
+                    <span>Margin</span>
+                    <span className="mono">
+                      ${profit.toLocaleString('en-US', { maximumFractionDigits: 0 })} ({margin}%)
+                    </span>
+                  </div>
                 </div>
               )}
 
-              {charges.filter((c) => c.type === 'cost').length > 0 && (
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#dc2626', marginBottom: 8 }}>
-                    <i className="bi bi-arrow-down-circle me-2"></i>Cost Lines
-                  </div>
-                  <table className="erp-table">
-                    <thead>
-                      <tr>
-                        <th>Description</th><th>Category</th><th>Vendor</th>
-                        <th className="text-end">Amount</th><th className="text-end">Qty</th>
-                        <th className="text-center">FX</th><th className="text-end">Total (USD)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {charges.filter((c) => c.type === 'cost').map((c) => (
-                        <tr key={c._id}>
-                          <td>{c.description}</td>
-                          <td>
-                            <span style={{ fontSize: 11, padding: '1px 7px', background: 'var(--surface-2)', borderRadius: 4, fontWeight: 600 }}>
-                              {c.category}
-                            </span>
-                          </td>
-                          <td className="text-muted small">{c.vendor?.companyName || '—'}</td>
-                          <td className="text-end font-monospace small">
-                            {c.currency} {(c.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="text-end">{c.quantity || 1}</td>
-                          <td className="text-center">{c.exchangeRate || 1}</td>
-                          <td className="text-end fw-bold font-monospace" style={{ color: '#dc2626' }}>
-                            {((c.amount || 0) * (c.exchangeRate || 1) * (c.quantity || 1)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {charges.length === 0 && (
-                <div className="dash-empty-state">
-                  <i className="bi bi-currency-dollar"></i>
-                  <div>No charges entered yet</div>
+              {/* Documents quick list */}
+              {docs.length > 0 && (
+                <div className="sd-card">
+                  <div className="sd-card-title">Documents</div>
+                  {docs.slice(0, 6).map((d) => {
+                    const statusKey = DOC_STATUS_MAP[d.status] || 'pending';
+                    return (
+                      <div key={d._id} className="sd-doc-row">
+                        <div className="sd-doc-name">
+                          <i className={`bi bi-file-earmark-text sd-doc-icon`} />
+                          {d.name}
+                        </div>
+                        <span className={`sd-doc-status ${statusKey}`}>{d.status || 'pending'}</span>
+                      </div>
+                    );
+                  })}
+                  {docs.length > 6 && (
+                    <button
+                      className="sd-doc-more"
+                      onClick={() => setActiveTab('documents')}
+                    >
+                      +{docs.length - 6} more documents
+                    </button>
+                  )}
                 </div>
               )}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* ── DOCUMENTS ── */}
-          {activeTab === 'documents' && (
-            <div>
-              {docs.length === 0 ? (
-                <div className="dash-empty-state">
-                  <i className="bi bi-file-earmark-text"></i>
-                  <div>No documents attached yet</div>
-                </div>
-              ) : (
-                <table className="erp-table">
+        {/* ── MILESTONES ── */}
+        {activeTab === 'milestones' && (
+          <div style={{ maxWidth: 800 }}>
+            <div className="sd-ms-progress">
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}>
+                <span style={{ color: 'var(--muted)' }}>
+                  <strong style={{ color: 'var(--brand)' }}>{completedMs}</strong> of {totalMs} milestones completed
+                </span>
+                <span style={{ fontWeight: 700, color: 'var(--brand)' }}>{msPct}%</span>
+              </div>
+              <div className="sd-ms-progress-bar">
+                <div className="sd-ms-progress-fill" style={{ width: `${msPct}%` }} />
+              </div>
+            </div>
+
+            {shipment.milestones?.length ? (
+              <div className="sd-ms-timeline">
+                {shipment.milestones.map((m, i) => {
+                  const isCurrent = i === currentMsIdx && m.status !== 'completed';
+                  const msKey     = isCurrent && m.status === 'pending' ? 'in_progress' : m.status;
+                  return (
+                    <div key={m._id || i} className={`sd-ms-tl-item${m.status === 'completed' ? ' done' : ''}`}>
+                      <div className={`sd-ms-tl-dot ${msKey}`}>
+                        <i className={`bi ${MS_ICON[msKey] || 'bi-circle'}`} style={{ fontSize: 13 }} />
+                      </div>
+                      <div className="sd-ms-tl-content">
+                        <div className="sd-ms-tl-name">
+                          {m.event}
+                          {m.status !== 'pending' && (
+                            <span style={{
+                              fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
+                              background: (MS_COLOR[m.status] || '#d1d5db') + '22',
+                              color: MS_COLOR[m.status] || '#6b7280',
+                            }}>
+                              {m.status.replace('_', ' ')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="sd-ms-tl-sub">
+                          {m.location && <><i className="bi bi-geo-alt me-1" />{m.location}</>}
+                          {m.remarks && <span style={{ marginLeft: m.location ? 6 : 0 }}>{m.remarks}</span>}
+                        </div>
+                        <div className={`sd-ms-tl-date${m.actualDate ? ' actual' : ''}`}>
+                          {m.actualDate
+                            ? `Completed ${fmt(m.actualDate)}`
+                            : m.plannedDate
+                            ? `Planned ${fmt(m.plannedDate)}`
+                            : 'No date set'}
+                        </div>
+                      </div>
+                      {isOps && (
+                        <button className="sd-btn" style={{ fontSize: 11, padding: '4px 10px', flexShrink: 0 }}
+                          onClick={() => setEditingMs(m)}>
+                          <i className="bi bi-pencil me-1" />Update
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="dash-empty-state">
+                <i className="bi bi-signpost-split" style={{ fontSize: 32, opacity: 0.3 }} />
+                <div>No milestones recorded</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── CONTAINERS ── */}
+        {activeTab === 'containers' && (
+          <div>
+            {shipment.containers?.length ? (
+              <div className="grid grid-3" style={{ gap: 16 }}>
+                {shipment.containers.map((c) => (
+                  <div key={c._id || c.containerNumber} className="sd-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <span className="mono fw-700" style={{ fontSize: 13 }}>{c.containerNumber || 'TBA'}</span>
+                      <span style={{ fontSize: 11, padding: '3px 8px', background: 'var(--surface-2)',
+                        borderRadius: 6, fontWeight: 600 }}>{c.containerType}</span>
+                    </div>
+                    {[
+                      { label: 'Seal No.',    value: c.sealNumber },
+                      { label: 'Gross Weight', value: c.grossWeight ? `${c.grossWeight} KG` : null },
+                      { label: 'CBM',         value: c.cbm },
+                      { label: 'Packages',    value: c.numberOfPackages },
+                    ].map(({ label, value }) => value ? (
+                      <div key={label} className="sd-row" style={{ padding: '5px 0' }}>
+                        <span className="sd-row-label">{label}</span>
+                        <span className="sd-row-value">{value}</span>
+                      </div>
+                    ) : null)}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="dash-empty-state">
+                <i className="bi bi-grid-3x3-gap" style={{ fontSize: 32, opacity: 0.3 }} />
+                <div>No containers on this shipment</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── DOCUMENTS ── */}
+        {activeTab === 'documents' && (
+          <div>
+            {docs.length === 0 ? (
+              <div className="dash-empty-state">
+                <i className="bi bi-file-earmark-text" style={{ fontSize: 32, opacity: 0.3 }} />
+                <div>No documents attached yet</div>
+              </div>
+            ) : (
+              <div className="card card-flush">
+                <table className="tbl">
                   <thead>
                     <tr>
-                      <th>Document</th><th>Category</th><th>Uploaded</th>
-                      <th className="text-end">Action</th>
+                      <th>Document</th>
+                      <th>Category</th>
+                      <th>Status</th>
+                      <th>Uploaded</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {docs.map((d) => (
-                      <tr key={d._id}>
-                        <td>
-                          <div className="fw-semibold" style={{ fontSize: 13 }}>{d.name}</div>
-                          {d.originalName && d.originalName !== d.name && (
-                            <small className="text-muted">{d.originalName}</small>
-                          )}
-                        </td>
-                        <td>
-                          <span style={{ fontSize: 11, padding: '1px 7px', background: 'var(--surface-2)', borderRadius: 4 }}>
-                            {d.category?.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                        <td className="text-muted small">{fmt(d.createdAt)}</td>
-                        <td className="text-end">
-                          <button
-                            className="ss-action-btn"
-                            style={{ fontSize: 11 }}
-                            onClick={() => documentsApi.download(d._id, d.originalName || d.name)}
-                          >
-                            <i className="bi bi-download me-1"></i>Download
-                          </button>
+                    {docs.map((d) => {
+                      const statusKey = DOC_STATUS_MAP[d.status] || 'pending';
+                      return (
+                        <tr key={d._id}>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <i className="bi bi-file-earmark-text" style={{ color: 'var(--muted)', fontSize: 14 }} />
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</div>
+                                {d.originalName && d.originalName !== d.name && (
+                                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{d.originalName}</div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: 11, padding: '2px 8px', background: 'var(--surface-2)',
+                              borderRadius: 6, fontWeight: 600 }}>
+                              {d.category?.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`sd-doc-status ${statusKey}`}>{d.status || 'pending'}</span>
+                          </td>
+                          <td style={{ fontSize: 12, color: 'var(--muted)' }}>{fmt(d.createdAt)}</td>
+                          <td>
+                            <button className="sd-btn" style={{ fontSize: 11, padding: '4px 10px' }}
+                              onClick={() => documentsApi.download(d._id, d.originalName || d.name)}>
+                              <i className="bi bi-download" /> Download
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── FINANCIALS ── */}
+        {activeTab === 'financials' && isFinance && (
+          <div>
+            {/* KPI strip */}
+            <div className="grid grid-4 mb-4" style={{ gap: 16 }}>
+              {[
+                { label: 'Total Revenue', value: fmtMoney(revenue), color: '#16a34a', icon: 'bi-arrow-up-circle-fill' },
+                { label: 'Total Cost',    value: fmtMoney(cost),    color: '#dc2626', icon: 'bi-arrow-down-circle-fill' },
+                { label: 'Gross Profit',  value: fmtMoney(profit),  color: profit >= 0 ? '#2563eb' : '#dc2626', icon: 'bi-graph-up' },
+                { label: 'Margin',        value: `${margin}%`,      color: parseFloat(margin) >= 15 ? '#16a34a' : '#d97706', icon: 'bi-percent' },
+              ].map(({ label, value, color, icon }) => (
+                <div key={label} className="kpi">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <i className={`bi ${icon}`} style={{ color, fontSize: 14 }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)' }}>
+                      {label}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color, fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
+                </div>
+              ))}
+            </div>
+
+            {charges.filter((c) => c.type === 'revenue').length > 0 && (
+              <div className="card card-flush mb-4">
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--hairline)', fontSize: 12, fontWeight: 700,
+                  textTransform: 'uppercase', letterSpacing: '0.06em', color: '#16a34a' }}>
+                  <i className="bi bi-arrow-up-circle me-2" />Revenue Lines
+                </div>
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>Description</th><th>Category</th>
+                      <th style={{ textAlign: 'right' }}>Amount</th>
+                      <th style={{ textAlign: 'right' }}>Qty</th>
+                      <th style={{ textAlign: 'center' }}>FX</th>
+                      <th style={{ textAlign: 'right' }}>Total (USD)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {charges.filter((c) => c.type === 'revenue').map((c) => (
+                      <tr key={c._id}>
+                        <td>{c.description}</td>
+                        <td><span style={{ fontSize: 11, padding: '1px 7px', background: 'var(--surface-2)', borderRadius: 4, fontWeight: 600 }}>{c.category}</span></td>
+                        <td className="mono" style={{ textAlign: 'right', fontSize: 12 }}>{c.currency} {(c.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                        <td style={{ textAlign: 'right' }}>{c.quantity || 1}</td>
+                        <td style={{ textAlign: 'center' }}>{c.exchangeRate || 1}</td>
+                        <td className="mono" style={{ textAlign: 'right', fontWeight: 700, color: '#16a34a' }}>
+                          {((c.amount || 0) * (c.exchangeRate || 1) * (c.quantity || 1)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              )}
-            </div>
-          )}
+              </div>
+            )}
 
-        </div>
+            {charges.filter((c) => c.type === 'cost').length > 0 && (
+              <div className="card card-flush">
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--hairline)', fontSize: 12, fontWeight: 700,
+                  textTransform: 'uppercase', letterSpacing: '0.06em', color: '#dc2626' }}>
+                  <i className="bi bi-arrow-down-circle me-2" />Cost Lines
+                </div>
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>Description</th><th>Category</th><th>Vendor</th>
+                      <th style={{ textAlign: 'right' }}>Amount</th>
+                      <th style={{ textAlign: 'right' }}>Qty</th>
+                      <th style={{ textAlign: 'center' }}>FX</th>
+                      <th style={{ textAlign: 'right' }}>Total (USD)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {charges.filter((c) => c.type === 'cost').map((c) => (
+                      <tr key={c._id}>
+                        <td>{c.description}</td>
+                        <td><span style={{ fontSize: 11, padding: '1px 7px', background: 'var(--surface-2)', borderRadius: 4, fontWeight: 600 }}>{c.category}</span></td>
+                        <td style={{ fontSize: 12, color: 'var(--muted)' }}>{c.vendor?.companyName || '—'}</td>
+                        <td className="mono" style={{ textAlign: 'right', fontSize: 12 }}>{c.currency} {(c.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                        <td style={{ textAlign: 'right' }}>{c.quantity || 1}</td>
+                        <td style={{ textAlign: 'center' }}>{c.exchangeRate || 1}</td>
+                        <td className="mono" style={{ textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>
+                          {((c.amount || 0) * (c.exchangeRate || 1) * (c.quantity || 1)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {charges.length === 0 && (
+              <div className="dash-empty-state">
+                <i className="bi bi-currency-dollar" style={{ fontSize: 32, opacity: 0.3 }} />
+                <div>No charges entered yet</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── TRACKING ── */}
+        {activeTab === 'tracking' && (
+          <TrackingPanel shipmentId={shipment._id} shipment={shipment} />
+        )}
+
+        {/* ── MESSAGES (Tasks) ── */}
+        {activeTab === 'messages' && (
+          <TasksPanel shipmentId={shipment._id} shipmentNumber={shipment.shipmentNumber} />
+        )}
+
       </div>
 
-      {/* Modals */}
+      {/* ── Modals ──────────────────────────────────────────────── */}
       {editingMs && (
         <MilestoneEditModal
           milestone={editingMs}
@@ -1023,6 +1138,13 @@ const ShipmentDetail = () => {
           action={approvalAction}
           onClose={() => setApprovalAction(null)}
           onSaved={() => { setApprovalAction(null); load(); }}
+        />
+      )}
+      {showUpdateStatus && (
+        <UpdateStatusModal
+          shipment={shipment}
+          onClose={() => setShowUpdateStatus(false)}
+          onSaved={() => { setShowUpdateStatus(false); load(); }}
         />
       )}
     </div>

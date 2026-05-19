@@ -1,5 +1,4 @@
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { Alert, Form, Modal, Row, Col } from 'react-bootstrap';
+import { useEffect, useState, useRef } from 'react';
 import { usersApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 
@@ -8,17 +7,29 @@ const ROLES = ['admin','manager','operations','sales','finance','customer_servic
 const DEPTS = ['operations','sales','finance','customs','documentation','management','it','hr'];
 
 const ROLE_COLOR = {
-  admin: '#ef4444', manager: '#f59e0b', operations: '#8b5cf6',
-  sales: '#3b82f6', finance: '#10b981', customer_service: '#06b6d4',
-  agent: '#6b7280', customer: '#6b7280',
+  admin:            { bg: '#fee2e2', fg: '#dc2626' },
+  manager:          { bg: '#fef9c3', fg: '#ca8a04' },
+  operations:       { bg: '#ede9fe', fg: '#7c3aed' },
+  sales:            { bg: '#dbeafe', fg: '#1d4ed8' },
+  finance:          { bg: '#dcfce7', fg: '#16a34a' },
+  customer_service: { bg: '#e0f2fe', fg: '#0891b2' },
+  agent:            { bg: '#f3f4f6', fg: '#6b7280' },
 };
 
 const STATUS_CFG = {
-  active:    { label: 'Active',    color: '#16a34a', bg: '#dcfce7', dot: true },
-  inactive:  { label: 'Inactive',  color: '#6b7280', bg: '#f3f4f6', dot: false },
-  suspended: { label: 'Suspended', color: '#6b7280', bg: '#f3f4f6', dot: false },
-  pending:   { label: 'Pending',   color: '#6b7280', bg: '#f3f4f6', dot: false },
+  active:    { label: 'Active',    color: '#16a34a', bg: '#dcfce7' },
+  inactive:  { label: 'Inactive',  color: '#6b7280', bg: '#f3f4f6' },
+  suspended: { label: 'Suspended', color: '#dc2626', bg: '#fee2e2' },
+  pending:   { label: 'Pending',   color: '#ca8a04', bg: '#fef9c3' },
 };
+
+const AVATAR_PAL = [
+  { bg: '#FFEFE8', fg: '#FF7A45' }, { bg: '#EDE9FE', fg: '#7C3AED' },
+  { bg: '#DBEAFE', fg: '#1D4ED8' }, { bg: '#DCFCE7', fg: '#16A34A' },
+  { bg: '#FEF9C3', fg: '#CA8A04' }, { bg: '#FEE2E2', fg: '#DC2626' },
+  { bg: '#E0F2FE', fg: '#0891B2' },
+];
+const avatarPal = (name = '') => AVATAR_PAL[(name.charCodeAt(0) || 0) % AVATAR_PAL.length];
 
 const fmtDate = (d) => {
   if (!d) return 'Never';
@@ -30,6 +41,21 @@ const fmtDate = (d) => {
   if (diff < 604800_000) return `${Math.floor(diff / 86400000)}d ago`;
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
+
+const roleFmt = (r) => r?.replace(/_/g, ' ') ?? '—';
+const capFirst = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+
+/* ── Inline modal shell ───────────────────────────────────────── */
+const ModalShell = ({ children, onClose, width = 620 }) => (
+  <>
+    <div className="um-backdrop" onClick={onClose} />
+    <div className="um-modal-center">
+      <div className="um-modal" style={{ maxWidth: width }}>
+        {children}
+      </div>
+    </div>
+  </>
+);
 
 /* ── User Modal (create / edit) ───────────────────────────────── */
 const UserModal = ({ user: existing, currentRole, onClose, onSaved }) => {
@@ -68,122 +94,109 @@ const UserModal = ({ user: existing, currentRole, onClose, onSaved }) => {
     } finally { setSaving(false); }
   };
 
-  const Label = ({ children }) => (
-    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--bs-secondary-color)', marginBottom: 5 }}>
-      {children}
-    </div>
-  );
-
-  const fieldStyle = { fontSize: 13, background: 'var(--surface-2)', border: '1px solid var(--border-soft)', borderRadius: 8 };
+  const iconBg = isEdit ? '#1a56db' : '#059669';
 
   return (
-    <Modal show onHide={onClose} size="lg" centered>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: `${isEdit ? '#1a56db' : '#059669'}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: isEdit ? '#1a56db' : '#059669', fontSize: 17 }}>
+    <ModalShell onClose={onClose}>
+      <div className="um-modal-header">
+        <div className="um-modal-title-row">
+          <div className="um-modal-icon" style={{ background: `${iconBg}18`, color: iconBg }}>
             <i className={`bi ${isEdit ? 'bi-person-gear' : 'bi-person-plus'}`}></i>
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>{isEdit ? 'Edit Staff User' : 'Create Staff User'}</div>
-            <div style={{ fontSize: 11.5, color: 'var(--bs-secondary-color)' }}>
+            <div className="um-modal-title">{isEdit ? 'Edit Staff User' : 'Create Staff User'}</div>
+            <div className="um-modal-sub">
               {isEdit ? `Editing ${existing.firstName} ${existing.lastName}` : 'Add a new team member'}
             </div>
           </div>
         </div>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 18, color: 'var(--bs-secondary-color)', cursor: 'pointer', padding: 4, lineHeight: 1 }}>
-          <i className="bi bi-x-lg"></i>
-        </button>
+        <button className="um-modal-close" onClick={onClose}><i className="bi bi-x-lg"></i></button>
       </div>
 
-      <Form onSubmit={save}>
-        <Modal.Body style={{ padding: '18px 22px 22px' }}>
-          {err && <Alert variant="danger" className="py-2 mb-3" style={{ fontSize: 13 }}>{err}</Alert>}
+      <form onSubmit={save}>
+        <div className="um-modal-body">
+          {err && <div className="um-error">{err}</div>}
 
-          <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--bs-secondary-color)', marginBottom: 10, borderBottom: '1px solid var(--border-soft)', paddingBottom: 6 }}>
-            Identity
-          </div>
-          <Row className="g-3 mb-3">
-            <Col sm={6}>
-              <Label>First Name *</Label>
-              <Form.Control required value={form.firstName} onChange={set('firstName')} style={fieldStyle} />
-            </Col>
-            <Col sm={6}>
-              <Label>Last Name *</Label>
-              <Form.Control required value={form.lastName} onChange={set('lastName')} style={fieldStyle} />
-            </Col>
-            <Col sm={6}>
-              <Label>Email *</Label>
-              <Form.Control type="email" required value={form.email} onChange={set('email')} disabled={isEdit} style={fieldStyle} />
-            </Col>
-            <Col sm={6}>
-              <Label>{isEdit ? 'New Password (leave blank to keep)' : 'Password *'}</Label>
-              <Form.Control
+          <div className="um-section-label">Identity</div>
+          <div className="um-form-grid">
+            <div>
+              <div className="um-field-label">First Name *</div>
+              <input className="um-input" required value={form.firstName} onChange={set('firstName')} />
+            </div>
+            <div>
+              <div className="um-field-label">Last Name *</div>
+              <input className="um-input" required value={form.lastName} onChange={set('lastName')} />
+            </div>
+            <div>
+              <div className="um-field-label">Email *</div>
+              <input className="um-input" type="email" required value={form.email} onChange={set('email')} disabled={isEdit} />
+            </div>
+            <div>
+              <div className="um-field-label">{isEdit ? 'New Password (leave blank to keep)' : 'Password *'}</div>
+              <input
+                className="um-input"
                 type="password"
                 required={!isEdit}
                 placeholder={isEdit ? 'Leave blank to keep current' : ''}
                 value={form.password}
                 onChange={set('password')}
-                style={fieldStyle}
               />
-            </Col>
-            <Col sm={6}>
-              <Label>Phone</Label>
-              <Form.Control value={form.phone} onChange={set('phone')} style={fieldStyle} placeholder="+971 4 000 0000" />
-            </Col>
-            <Col sm={6}>
-              <Label>Branch / Office</Label>
-              <Form.Control value={form.branch} onChange={set('branch')} placeholder="e.g. Dubai HQ" style={fieldStyle} />
-            </Col>
-          </Row>
-
-          <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--bs-secondary-color)', marginBottom: 10, borderBottom: '1px solid var(--border-soft)', paddingBottom: 6 }}>
-            Access & Role
+            </div>
+            <div>
+              <div className="um-field-label">Phone</div>
+              <input className="um-input" value={form.phone} onChange={set('phone')} placeholder="+971 4 000 0000" />
+            </div>
+            <div>
+              <div className="um-field-label">Branch / Office</div>
+              <input className="um-input" value={form.branch} onChange={set('branch')} placeholder="e.g. Dubai HQ" />
+            </div>
           </div>
-          <Row className="g-3">
-            <Col sm={isEdit ? 4 : 6}>
-              <Label>Role *</Label>
-              <Form.Select required value={form.role} onChange={set('role')} style={fieldStyle}>
+
+          <div className="um-section-label" style={{ marginTop: 20 }}>Access & Role</div>
+          <div className="um-form-grid">
+            <div>
+              <div className="um-field-label">Role *</div>
+              <select className="um-select" required value={form.role} onChange={set('role')}>
                 {ROLES
                   .filter((r) => currentRole === 'admin' || r !== 'admin')
                   .map((r) => (
-                    <option key={r} value={r}>
-                      {r.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())}
-                    </option>
+                    <option key={r} value={r}>{capFirst(roleFmt(r))}</option>
                   ))}
-              </Form.Select>
-            </Col>
-            <Col sm={isEdit ? 4 : 6}>
-              <Label>Department</Label>
-              <Form.Select value={form.department} onChange={set('department')} style={fieldStyle}>
+              </select>
+            </div>
+            <div>
+              <div className="um-field-label">Department</div>
+              <select className="um-select" value={form.department} onChange={set('department')}>
                 <option value="">— Select —</option>
                 {DEPTS.map((d) => (
-                  <option key={d} value={d}>{d.replace(/^\w/, c => c.toUpperCase())}</option>
+                  <option key={d} value={d}>{capFirst(d)}</option>
                 ))}
-              </Form.Select>
-            </Col>
+              </select>
+            </div>
             {isEdit && (
-              <Col sm={4}>
-                <Label>Status</Label>
-                <Form.Select value={form.status} onChange={set('status')} style={fieldStyle}>
+              <div>
+                <div className="um-field-label">Status</div>
+                <select className="um-select" value={form.status} onChange={set('status')}>
                   {['active','inactive','suspended','pending'].map((s) => (
-                    <option key={s} value={s}>{s.replace(/^\w/, c => c.toUpperCase())}</option>
+                    <option key={s} value={s}>{capFirst(s)}</option>
                   ))}
-                </Form.Select>
-              </Col>
+                </select>
+              </div>
             )}
-          </Row>
-        </Modal.Body>
-        <Modal.Footer style={{ borderTop: '1px solid var(--border-soft)', padding: '12px 22px', gap: 8 }}>
-          <button type="button" className="ss-action-btn" onClick={onClose} disabled={saving}>Cancel</button>
-          <button type="submit" className="ss-action-btn ss-action-btn-primary" disabled={saving}>
+          </div>
+        </div>
+
+        <div className="um-modal-footer">
+          <button type="button" className="um-btn" onClick={onClose} disabled={saving}>Cancel</button>
+          <button type="submit" className="um-btn um-btn-primary" disabled={saving}>
             {saving
-              ? <><span className="spinner-border spinner-border-sm me-2" style={{ width: 12, height: 12, borderWidth: 2 }}></span>Saving…</>
-              : <><i className={`bi ${isEdit ? 'bi-check-lg' : 'bi-person-plus'} me-2`}></i>{isEdit ? 'Save Changes' : 'Create User'}</>
+              ? <><span className="um-spinner"></span>Saving…</>
+              : <><i className={`bi ${isEdit ? 'bi-check-lg' : 'bi-person-plus'} me-1`}></i>{isEdit ? 'Save Changes' : 'Create User'}</>
             }
           </button>
-        </Modal.Footer>
-      </Form>
-    </Modal>
+        </div>
+      </form>
+    </ModalShell>
   );
 };
 
@@ -203,37 +216,40 @@ const DeactivateModal = ({ user: target, onClose, onSaved }) => {
   };
 
   return (
-    <Modal show onHide={onClose} centered size="sm">
-      <div style={{ padding: '20px 22px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626', fontSize: 17 }}>
+    <ModalShell onClose={onClose} width={420}>
+      <div className="um-modal-header">
+        <div className="um-modal-title-row">
+          <div className="um-modal-icon" style={{ background: '#fee2e2', color: '#dc2626' }}>
             <i className="bi bi-person-x"></i>
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 15 }}>Deactivate User</div>
-            <div style={{ fontSize: 12, color: 'var(--bs-secondary-color)' }}>This action can be reversed later</div>
+            <div className="um-modal-title">Deactivate User</div>
+            <div className="um-modal-sub">This action can be reversed later</div>
           </div>
         </div>
-        {err && <Alert variant="danger" className="py-2 mb-3" style={{ fontSize: 13 }}>{err}</Alert>}
-        <p style={{ fontSize: 13, color: 'var(--bs-body-color)', margin: 0 }}>
+        <button className="um-modal-close" onClick={onClose}><i className="bi bi-x-lg"></i></button>
+      </div>
+      <div className="um-modal-body">
+        {err && <div className="um-error">{err}</div>}
+        <p style={{ fontSize: 13, color: 'var(--ink-2)', margin: 0 }}>
           Deactivate <strong>{target.firstName} {target.lastName}</strong>? They will no longer be able to sign in.
         </p>
       </div>
-      <div style={{ padding: '12px 22px', borderTop: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <button className="ss-action-btn" onClick={onClose} disabled={confirming}>Cancel</button>
+      <div className="um-modal-footer">
+        <button className="um-btn" onClick={onClose} disabled={confirming}>Cancel</button>
         <button
-          className="ss-action-btn"
+          className="um-btn"
           style={{ background: '#dc2626', color: '#fff', borderColor: '#dc2626' }}
           onClick={confirm}
           disabled={confirming}
         >
           {confirming
-            ? <><span className="spinner-border spinner-border-sm me-2" style={{ width: 12, height: 12, borderWidth: 2 }}></span>Deactivating…</>
-            : <><i className="bi bi-person-x me-2"></i>Deactivate</>
+            ? <><span className="um-spinner" style={{ borderTopColor: '#fff' }}></span>Deactivating…</>
+            : <><i className="bi bi-person-x me-1"></i>Deactivate</>
           }
         </button>
       </div>
-    </Modal>
+    </ModalShell>
   );
 };
 
@@ -259,7 +275,7 @@ const FilterDropdown = ({ roleFilter, statusFilter, onRole, onStatus, onClear, o
               className={`um-filter-chip${roleFilter === r ? ' active' : ''}`}
               onClick={() => onRole(roleFilter === r ? '' : r)}
             >
-              {r.replace('_', ' ')}
+              {roleFmt(r)}
             </button>
           ))}
         </div>
@@ -305,35 +321,42 @@ const UserRow = ({ u, currentUserId, onEdit, onDeactivate }) => {
     return () => document.removeEventListener('mousedown', handler);
   }, [menuOpen]);
 
-  const roleColor = ROLE_COLOR[u.role] || '#1a56db';
-  const sc = STATUS_CFG[u.status] || { label: u.status, color: '#6b7280', bg: '#f3f4f6', dot: false };
+  const sc   = STATUS_CFG[u.status] || { label: u.status, color: '#6b7280', bg: '#f3f4f6' };
+  const rc   = ROLE_COLOR[u.role]   || { bg: '#f3f4f6', fg: '#6b7280' };
+  const pal  = avatarPal(u.firstName);
+  const initials = `${u.firstName?.[0] ?? ''}${u.lastName?.[0] ?? ''}`.toUpperCase();
 
   return (
     <div className="um-user-row">
-      {/* Name */}
-      <div className="um-user-info">
-        <div className="um-user-name">{u.firstName} {u.lastName}</div>
+      {/* Name + avatar */}
+      <div className="um-cell-name">
+        <div className="um-avatar" style={{ background: pal.bg, color: pal.fg }}>{initials}</div>
+        <div>
+          <div className="um-user-name">{u.firstName} {u.lastName}</div>
+          {u.department && <div className="um-user-dept">{capFirst(u.department)}</div>}
+        </div>
       </div>
 
       {/* Email */}
       <div className="um-cell um-cell-email">{u.email}</div>
 
       {/* Role */}
-      <div className="um-cell um-cell-role" style={{ fontSize: 13.5, color: 'var(--bs-body-color)', fontWeight: 500 }}>
-        {u.role?.replace('_', ' ')}
+      <div className="um-cell">
+        <span className="um-role-chip" style={{ background: rc.bg, color: rc.fg }}>
+          {roleFmt(u.role)}
+        </span>
       </div>
 
       {/* Last login */}
       <div className="um-cell um-cell-login">
-        <span style={{ fontSize: 12, color: 'var(--bs-secondary-color)' }}>
-          <i className="bi bi-clock me-1 opacity-40"></i>{fmtDate(u.lastLogin)}
-        </span>
+        <i className="bi bi-clock me-1" style={{ opacity: .4, fontSize: 11 }}></i>
+        {fmtDate(u.lastLogin)}
       </div>
 
       {/* Status */}
-      <div className="um-cell um-cell-status">
+      <div className="um-cell">
         <span className="um-status-badge" style={{ background: sc.bg, color: sc.color }}>
-          {sc.dot && <span className="um-status-dot" style={{ background: sc.color }}></span>}
+          <span className="um-status-dot" style={{ background: sc.color }}></span>
           {sc.label}
         </span>
       </div>
@@ -363,16 +386,16 @@ const UserRow = ({ u, currentUserId, onEdit, onDeactivate }) => {
 /* ── Main Component ───────────────────────────────────────────── */
 const UserManagement = () => {
   const { user: currentUser } = useAuth();
-  const [users, setUsers]         = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState('');
-  const [search, setSearch]       = useState('');
-  const [roleFilter, setRole]     = useState('');
-  const [statusFilter, setStatus] = useState('active');
+  const [users, setUsers]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState('');
+  const [search, setSearch]         = useState('');
+  const [roleFilter, setRole]       = useState('');
+  const [statusFilter, setStatus]   = useState('active');
   const [showFilter, setShowFilter] = useState(false);
-  const [editTarget, setEdit]     = useState(null);
+  const [editTarget, setEdit]       = useState(null);
   const [deactivateTarget, setDeactivate] = useState(null);
-  const [showCreate, setCreate]   = useState(false);
+  const [showCreate, setCreate]     = useState(false);
 
   const load = async () => {
     setLoading(true); setError('');
@@ -387,40 +410,41 @@ const UserManagement = () => {
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [search, roleFilter, statusFilter]);
 
   const activeFilterCount = (roleFilter ? 1 : 0) + (statusFilter ? 1 : 0);
-  const totalActive = users.filter((u) => u.status === 'active').length;
 
   if (loading) {
     return (
-      <div className="ss-loading" style={{ minHeight: 400 }}>
-        <div className="dashboard-loader">
-          <div className="dashboard-loader-ring"></div>
-          <i className="bi bi-people dashboard-loader-icon"></i>
+      <div className="um-shell">
+        <div className="um-loading">
+          <div className="dashboard-loader">
+            <div className="dashboard-loader-ring"></div>
+            <i className="bi bi-people dashboard-loader-icon"></i>
+          </div>
+          <span>Loading users…</span>
         </div>
-        <span>Loading users…</span>
       </div>
     );
   }
 
   return (
-    <div>
+    <div className="um-shell">
       {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="ss-page-header">
-        <div className="ss-page-header-left">
-          <div className="ss-page-header-icon"><i className="bi bi-people"></i></div>
-          <div>
-            <h4 className="ss-page-title">User Management</h4>
+      <div className="um-header">
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <i className="bi bi-people" style={{ fontSize: 18, color: 'var(--muted)' }}></i>
           </div>
+          <h1 className="um-title">User Management</h1>
+          <div className="um-subtitle">{users.length} team member{users.length !== 1 ? 's' : ''}</div>
         </div>
-        <button className="ss-action-btn ss-action-btn-primary" onClick={() => setCreate(true)}>
-          <i className="bi bi-person-plus me-2"></i>New User
+        <button className="um-btn um-btn-primary" onClick={() => setCreate(true)}>
+          <i className="bi bi-person-plus me-1"></i>New User
         </button>
       </div>
 
-      {error && <div className="alert alert-danger mb-4" style={{ fontSize: 13 }}>{error}</div>}
+      {error && <div className="um-error" style={{ marginBottom: 16 }}>{error}</div>}
 
       {/* ── Toolbar ─────────────────────────────────────────────── */}
       <div className="um-toolbar">
-        {/* Search */}
         <div className="um-search-box">
           <i className="bi bi-search um-search-icon"></i>
           <input
@@ -436,7 +460,6 @@ const UserManagement = () => {
           )}
         </div>
 
-        {/* Filter button + dropdown */}
         <div style={{ position: 'relative' }}>
           <button
             className={`um-filter-btn${activeFilterCount > 0 ? ' has-filters' : ''}`}
@@ -460,10 +483,9 @@ const UserManagement = () => {
           )}
         </div>
 
-        {/* Active filter chips */}
         {roleFilter && (
           <span className="um-active-chip">
-            {roleFilter.replace('_', ' ')}
+            {roleFmt(roleFilter)}
             <button onClick={() => setRole('')}><i className="bi bi-x"></i></button>
           </span>
         )}
@@ -479,8 +501,8 @@ const UserManagement = () => {
         </span>
       </div>
 
-      {/* ── User Table ──────────────────────────────────────────── */}
-      <div className="erp-card">
+      {/* ── Table ───────────────────────────────────────────────── */}
+      <div className="um-table-wrap">
         <div className="um-table-header">
           <div className="um-th um-th-name">Name</div>
           <div className="um-th um-th-email">Email</div>
@@ -491,29 +513,27 @@ const UserManagement = () => {
         </div>
 
         {users.length === 0 ? (
-          <div className="dash-empty-state" style={{ padding: '56px 20px' }}>
-            <i className="bi bi-people" style={{ fontSize: 40, opacity: 0.2 }}></i>
-            <span>No users found</span>
-            <button className="ss-action-btn ss-action-btn-primary mt-2" onClick={() => setCreate(true)}>
-              <i className="bi bi-person-plus me-2"></i>Create First User
+          <div className="um-empty">
+            <i className="bi bi-people" style={{ fontSize: 40, opacity: .18 }}></i>
+            <div style={{ fontWeight: 600, color: 'var(--ink-2)' }}>No users found</div>
+            <button className="um-btn um-btn-primary" onClick={() => setCreate(true)}>
+              <i className="bi bi-person-plus me-1"></i>Create First User
             </button>
           </div>
         ) : (
-          <div>
-            {users.map((u) => (
-              <UserRow
-                key={u._id}
-                u={u}
-                currentUserId={currentUser?._id}
-                onEdit={setEdit}
-                onDeactivate={setDeactivate}
-              />
-            ))}
-          </div>
+          users.map((u) => (
+            <UserRow
+              key={u._id}
+              u={u}
+              currentUserId={currentUser?._id}
+              onEdit={setEdit}
+              onDeactivate={setDeactivate}
+            />
+          ))
         )}
       </div>
 
-      {/* Modals */}
+      {/* ── Modals ──────────────────────────────────────────────── */}
       {(showCreate || editTarget) && (
         <UserModal
           user={editTarget || null}

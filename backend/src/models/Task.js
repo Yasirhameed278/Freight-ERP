@@ -7,7 +7,7 @@ const taskSchema = new Schema(
 
     status: {
       type: String,
-      enum: ['open', 'in_progress', 'done', 'cancelled'],
+      enum: ['open', 'in_progress', 'review', 'done', 'cancelled'],
       default: 'open',
       index: true,
     },

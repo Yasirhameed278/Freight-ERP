@@ -3,6 +3,18 @@ const Shipment = require('../models/Shipment');
 const { getTracking } = require('./tracking');
 const { create, createForRoles } = require('./notificationService');
 
+const POLL_CONCURRENCY   = 5;   // shipments processed in parallel per batch
+const SHIPMENT_TIMEOUT_MS = 20_000; // max ms per shipment before we give up
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 // Statuses that are worth polling — ignore quotes, delivered, cancelled
 const POLLABLE_STATUSES = [
   'booked', 'pickup_scheduled', 'cargo_received',
@@ -81,21 +93,41 @@ async function processShipment(shipment) {
   await Shipment.findByIdAndUpdate(shipment._id, update);
 }
 
+let isPolling = false;
+
 async function runPoll() {
-  const shipments = await Shipment.find({
-    status: { $in: POLLABLE_STATUSES },
-    mode:   { $in: ['sea', 'air', 'multimodal'] },
-  })
-    .select('shipmentNumber mode status milestones mblNumber hblNumber awbNumber containers vesselName voyageNumber carrierCode portOfLoading portOfDischarge etd eta trackingProvider operationsManager vesselPosition')
-    .lean();
-
-  if (!shipments.length) return;
-
-  for (const s of shipments) {
-    await processShipment(s);
+  if (isPolling) {
+    console.warn('[tracking-poller] Previous poll still running — skipping this tick');
+    return;
   }
+  isPolling = true;
 
-  console.log(`[tracking-poller] Polled ${shipments.length} active shipments`);
+  try {
+    const shipments = await Shipment.find({
+      status: { $in: POLLABLE_STATUSES },
+      mode:   { $in: ['sea', 'air', 'multimodal'] },
+    })
+      .select('shipmentNumber mode status milestones mblNumber hblNumber awbNumber containers vesselName voyageNumber carrierCode portOfLoading portOfDischarge etd eta trackingProvider operationsManager vesselPosition')
+      .lean();
+
+    if (!shipments.length) return;
+
+    // Process in parallel batches — limits DB/network pressure while staying faster than sequential
+    for (let i = 0; i < shipments.length; i += POLL_CONCURRENCY) {
+      const batch = shipments.slice(i, i + POLL_CONCURRENCY);
+      await Promise.allSettled(
+        batch.map((s) =>
+          withTimeout(processShipment(s), SHIPMENT_TIMEOUT_MS).catch((err) =>
+            console.error(`[tracking-poller] ${s.shipmentNumber}: ${err.message}`)
+          )
+        )
+      );
+    }
+
+    console.log(`[tracking-poller] Polled ${shipments.length} active shipment(s)`);
+  } finally {
+    isPolling = false;
+  }
 }
 
 function startTrackingPoller() {

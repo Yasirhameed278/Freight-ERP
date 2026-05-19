@@ -10,7 +10,6 @@ import Kanban from './pages/Kanban';
 import Shipments from './pages/Shipments';
 import ShipmentDetail from './pages/ShipmentDetail';
 import ShipmentForm from './pages/ShipmentForm';
-import Analytics from './pages/Analytics';
 import SalesSummary from './pages/SalesSummary';
 import ARPortal from './pages/ARPortal';
 import APPortal from './pages/APPortal';
@@ -51,14 +50,7 @@ const App = () => {
           </RoleRoute>
         } />
 
-        {/* Analytics */}
-        <Route path="/analytics" element={
-          <RoleRoute roles={['admin', 'manager', 'finance', 'operations']}>
-            <Analytics />
-          </RoleRoute>
-        } />
-
-        <Route path="/sales-summary" element={
+<Route path="/sales-summary" element={
           <RoleRoute roles={['admin', 'manager', 'finance']}>
             <SalesSummary />
           </RoleRoute>
