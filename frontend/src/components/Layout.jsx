@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import { clientsApi, shipmentsApi } from '../api/index';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
@@ -212,11 +213,193 @@ const QuickCreatePanel = ({ onClose }) => {
   );
 };
 
+/* ── Global Search / Command Palette ───────────────────────── */
+const QUICK_NAV = [
+  { to: '/dashboard', label: 'Dashboard',     icon: 'bi-speedometer2', color: '#1a56db' },
+  { to: '/shipments', label: 'Shipments',     icon: 'bi-boxes',        color: '#8b5cf6' },
+  { to: '/invoices',  label: 'Invoices',      icon: 'bi-receipt',      color: '#0891b2' },
+  { to: '/clients',   label: 'Clients',       icon: 'bi-building',     color: '#059669' },
+  { to: '/pipeline',  label: 'Pipeline',      icon: 'bi-kanban',       color: '#d97706' },
+  { to: '/ar-portal', label: 'AR Portal',     icon: 'bi-wallet2',      color: '#dc2626' },
+];
+
+const SHIP_STATUS_COLOR = {
+  draft: '#6b7280', pending: '#f59e0b', approved: '#1a56db',
+  'in-transit': '#8b5cf6', 'at-port': '#0891b2', delivered: '#10b981',
+  cancelled: '#ef4444',
+};
+
+const GlobalSearch = ({ onClose }) => {
+  const [query, setQuery]       = useState('');
+  const [results, setResults]   = useState({ clients: [], shipments: [] });
+  const [loading, setLoading]   = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const inputRef  = useRef(null);
+  const navigate  = useNavigate();
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) { setResults({ clients: [], shipments: [] }); return; }
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const [cr, sr] = await Promise.all([
+          clientsApi.list({ search: q, limit: 5 }),
+          shipmentsApi.list({ search: q, limit: 5 }),
+        ]);
+        setResults({ clients: cr.items || [], shipments: sr.items || [] });
+      } catch { /* silent */ } finally { setLoading(false); }
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const flatItems = useMemo(() => [
+    ...results.clients.map(c  => ({ type: 'client',   data: c, to: `/clients/${c._id}` })),
+    ...results.shipments.map(s => ({ type: 'shipment', data: s, to: `/shipments/${s._id}` })),
+  ], [results]);
+
+  const goTo = (to) => { navigate(to); onClose(); };
+
+  const handleKey = (e) => {
+    if (e.key === 'Escape') { onClose(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, flatItems.length - 1)); }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, -1)); }
+    if (e.key === 'Enter' && flatItems[activeIdx]) goTo(flatItems[activeIdx].to);
+  };
+
+  const hasResults = results.clients.length > 0 || results.shipments.length > 0;
+
+  return (
+    <div className="gsearch-overlay" onClick={onClose}>
+      <div className="gsearch-modal" onClick={e => e.stopPropagation()} onKeyDown={handleKey}>
+
+        {/* Input row */}
+        <div className="gsearch-input-wrap">
+          {loading
+            ? <span className="gsearch-spin" />
+            : <i className="bi bi-search gsearch-search-icon" />}
+          <input
+            ref={inputRef}
+            className="gsearch-input"
+            placeholder="Search clients, shipments, invoices…"
+            value={query}
+            onChange={e => { setQuery(e.target.value); setActiveIdx(-1); }}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          {query && (
+            <button className="gsearch-clear" onClick={() => { setQuery(''); inputRef.current?.focus(); }}>
+              <i className="bi bi-x-lg" />
+            </button>
+          )}
+          <kbd className="gsearch-esc-key">ESC</kbd>
+        </div>
+
+        {/* Results body */}
+        <div className="gsearch-body">
+
+          {/* No query → quick nav */}
+          {!query.trim() && (
+            <div className="gsearch-section">
+              <div className="gsearch-section-label">Quick navigation</div>
+              {QUICK_NAV.map(n => (
+                <button key={n.to} className="gsearch-item" onClick={() => goTo(n.to)}>
+                  <div className="gsearch-item-icon" style={{ background: `${n.color}18` }}>
+                    <i className={`bi ${n.icon}`} style={{ color: n.color }} />
+                  </div>
+                  <span className="gsearch-item-name">{n.label}</span>
+                  <i className="bi bi-arrow-return-left gsearch-enter-hint" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Query but no results */}
+          {query.trim().length >= 2 && !loading && !hasResults && (
+            <div className="gsearch-empty">
+              <i className="bi bi-search-heart" />
+              <span>No results for <strong>"{query}"</strong></span>
+              <p>Try a client name, shipment number, or invoice number.</p>
+            </div>
+          )}
+
+          {/* Clients */}
+          {results.clients.length > 0 && (
+            <div className="gsearch-section">
+              <div className="gsearch-section-label">Clients</div>
+              {results.clients.map((c, i) => (
+                <button
+                  key={c._id}
+                  className={`gsearch-item${activeIdx === i ? ' active' : ''}`}
+                  onClick={() => goTo(`/clients/${c._id}`)}
+                >
+                  <div className="gsearch-item-icon" style={{ background: '#1a56db15' }}>
+                    <i className="bi bi-building" style={{ color: '#1a56db' }} />
+                  </div>
+                  <div className="gsearch-item-body">
+                    <span className="gsearch-item-name">{c.companyName}</span>
+                    <span className="gsearch-item-sub">{c.clientCode} · {c.type}</span>
+                  </div>
+                  <span className="gsearch-badge" style={{
+                    background: c.status === 'active' ? '#10b98118' : '#6b728018',
+                    color: c.status === 'active' ? '#10b981' : '#6b7280',
+                  }}>{c.status}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Shipments */}
+          {results.shipments.length > 0 && (
+            <div className="gsearch-section">
+              <div className="gsearch-section-label">Shipments</div>
+              {results.shipments.map((s, i) => {
+                const sc = SHIP_STATUS_COLOR[s.status] || '#6b7280';
+                const gIdx = results.clients.length + i;
+                return (
+                  <button
+                    key={s._id}
+                    className={`gsearch-item${activeIdx === gIdx ? ' active' : ''}`}
+                    onClick={() => goTo(`/shipments/${s._id}`)}
+                  >
+                    <div className="gsearch-item-icon" style={{ background: '#8b5cf615' }}>
+                      <i className="bi bi-boxes" style={{ color: '#8b5cf6' }} />
+                    </div>
+                    <div className="gsearch-item-body">
+                      <span className="gsearch-item-name">{s.shipmentNumber}</span>
+                      <span className="gsearch-item-sub">
+                        {s.mode?.toUpperCase()} · {s.portOfLoading} → {s.portOfDischarge}
+                      </span>
+                    </div>
+                    <span className="gsearch-badge" style={{ background: `${sc}18`, color: sc }}>
+                      {s.status?.replace(/-/g, ' ')}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer hints */}
+        <div className="gsearch-footer">
+          <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+          <span><kbd>↵</kbd> open</span>
+          <span><kbd>ESC</kbd> close</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ── Layout ────────────────────────────────────────────────── */
 const Layout = () => {
-  const [showUser,  setShowUser]  = useState(false);
-  const [showNotif, setShowNotif] = useState(false);
-  const [showQuick, setShowQuick] = useState(false);
+  const [showUser,   setShowUser]   = useState(false);
+  const [showNotif,  setShowNotif]  = useState(false);
+  const [showQuick,  setShowQuick]  = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
 
   const { user }       = useAuth();
   const { unreadCount } = useNotifications();
@@ -225,6 +408,14 @@ const Layout = () => {
   const navigate       = useNavigate();
 
   const activeTopNav = resolveTopNav(pathname);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setShowSearch(true); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const toggle = (panel) => {
     setShowUser(panel === 'user'  ? (x) => !x : false);
@@ -243,6 +434,7 @@ const Layout = () => {
       <Sidebar />
 
       {anyPanelOpen && <div className="panel-backdrop" onClick={closeAll} />}
+      {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}
 
       <div className="app-content">
         {/* ── Topbar ── */}
@@ -265,15 +457,18 @@ const Layout = () => {
 
           {/* Right actions */}
           <div className="topbar-actions">
-            {/* Search */}
-            <div className="topbar-search d-none d-lg-flex">
-              <i className="bi bi-search" style={{ fontSize: 13 }} />
-              <input placeholder="Search shipments, clients, invoices…" readOnly />
+            {/* Search trigger */}
+            <button className="topbar-search d-none d-lg-flex" onClick={() => setShowSearch(true)}>
+              <i className="bi bi-search" style={{ fontSize: 12, opacity: 0.5 }} />
+              <span className="topbar-search-placeholder">Search shipments, clients, invoices…</span>
               <kbd>⌘K</kbd>
-            </div>
+            </button>
+
+            {/* Divider */}
+            <div className="topbar-divider d-none d-lg-flex" />
 
             {/* Theme toggle */}
-            <button className="topbar-icon-btn d-none d-lg-flex" onClick={toggleTheme} title={isDark ? 'Light mode' : 'Dark mode'}>
+            <button className="topbar-icon-btn d-none d-lg-flex align-items-center justify-content-center" onClick={toggleTheme} title={isDark ? 'Light mode' : 'Dark mode'}>
               <i className={`bi ${isDark ? 'bi-sun-fill' : 'bi-moon-fill'}`} />
             </button>
 
@@ -306,22 +501,21 @@ const Layout = () => {
             </div>
 
             {/* Chat */}
-            <button className="topbar-icon-btn d-none d-lg-flex" title="Messages">
+            <button className="topbar-icon-btn d-none d-lg-flex align-items-center justify-content-center" title="Messages">
               <i className="bi bi-chat-dots" />
             </button>
+
+            {/* Divider before user pill */}
+            <div className="topbar-divider" />
 
             {/* User pill */}
             <div className="topbar-btn-wrap">
               <button
                 className={`user-pill${showUser ? ' active' : ''}`}
                 onClick={() => toggle('user')}
-                style={{ border: `1px solid ${showUser ? 'var(--border-2)' : 'var(--border)'}` }}
+                title={`${user?.firstName} ${user?.lastName}`}
               >
                 <div className="avatar" style={{ background: roleColor }}>{initials}</div>
-                <div className="d-none d-lg-flex flex-col" style={{ gap: 0 }}>
-                  <div className="user-name">{user?.firstName} {user?.lastName?.charAt(0)}.</div>
-                  <div className="user-role">{user?.role?.replace('_', ' ')}</div>
-                </div>
               </button>
               {showUser && <UserMenu user={user} onClose={() => setShowUser(false)} />}
             </div>
